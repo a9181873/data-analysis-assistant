@@ -174,11 +174,12 @@ def make_tools(df: pd.DataFrame) -> list:
     ]
 
 
+from langchain_core.runnables import RunnableLambda
+
 def create_agent_executor(df: pd.DataFrame = None):
     """
-    創建並返回 LangGraph ReAct Agent。
-    使用 langgraph.prebuilt.create_react_agent 取代已棄用的
-    langchain.agents.create_react_agent + AgentExecutor。
+    創建並返回 LangGraph ReAct Agent (或 Fallback Runnable)。
+    若模型不支援 Tool Calling (如 deepseek-r1)，會退化為純問答模式。
     """
     tools = make_tools(df)
 
@@ -189,6 +190,7 @@ def create_agent_executor(df: pd.DataFrame = None):
             api_key=config.DEEPSEEK_API_KEY,
             base_url=config.DEEPSEEK_BASE_URL,
         )
+        return create_react_agent(llm, tools)
     else:
         llm = ChatOllama(
             model=config.LLM_MODEL,
@@ -196,10 +198,22 @@ def create_agent_executor(df: pd.DataFrame = None):
             timeout=config.OLLAMA_TIMEOUT,
         )
 
-    # langgraph create_react_agent 會自動建立 ReAct 迴圈
-    agent = create_react_agent(llm, tools)
-
-    return agent
+        try:
+            # 測試模型是否支援 bind_tools
+            llm.bind_tools(tools)
+            return create_react_agent(llm, tools)
+        except Exception as e:
+            # 模型不支援 Tools (如 DeepSeek-R1 in Ollama)
+            # 建立一個簡單的 Runnable 來模擬 agent 的 IO 格式
+            print(f"⚠️ 模型 {config.LLM_MODEL} 不支援 Tool Calling，將退化為純問答模式。({e})")
+            
+            def fallback_chain(state: dict) -> dict:
+                messages = state.get("messages", [])
+                response = llm.invoke(messages)
+                # 模擬 LangGraph 狀態回傳格式
+                return {"messages": messages + [response]}
+            
+            return RunnableLambda(fallback_chain)
 
 
 if __name__ == '__main__':
