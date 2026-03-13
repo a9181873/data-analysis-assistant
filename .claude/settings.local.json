@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show langchain-community)",
+      "Bash(pip show chromadb)",
+      "Bash(pip show llama-index-core)",
+      "Bash(pip show pandas)",
+      "Bash(pip show scikit-learn)",
+      "Bash(pip show plotly)",
+      "Bash(pip show streamlit)",
+      "Bash(pip show imbalanced-learn)",
+      "Bash(pip show statsmodels)",
+      "Bash(pip show sentence-transformers)",
+      "Bash(pip show langchain-ollama)",
+      "Bash(pip install imbalanced-learn xgboost lightgbm)",
+      "Bash(pip install chardet)",
+      "Bash(\"c:/Users/JY/Desktop/程式/data_analysis_assistant/data_assistant_env/Scripts/pip.exe\" install chardet)",
+      "Bash(\"data_assistant_env/Scripts/python.exe\" -c \":*)"
+    ]
+  }
+}

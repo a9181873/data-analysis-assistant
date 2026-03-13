@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+data_assistant_env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ChromaDB / RAG local data
+chroma_db/
+
+# Streamlit
+.streamlit/
+
+# Temp files
+*.tmp
+*.log
+
+# Gemini
+.gemini/

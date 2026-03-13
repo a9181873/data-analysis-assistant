@@ -1,0 +1,198 @@
+/* === 數據分析小幫手 — LOL Colors 4714 主題自訂樣式 === */
+/* Palette 4714: #9DC8C8, #58C9B9, #519D9E, #D1B6E1 */
+
+/* === 使用者輸入欄位放大 === */
+/* Chat input textarea */
+div[data-testid="stChatInput"] textarea,
+div[data-testid="stChatInputContainer"] textarea {
+    min-height: 64px !important;
+    max-height: 180px !important;
+    padding: 14px 16px !important;
+    font-size: 0.97rem !important;
+    line-height: 1.55 !important;
+    resize: vertical !important;
+    border-radius: 10px !important;
+}
+/* 包覆 chat input 的容器也要拉高 */
+div[data-testid="stChatInput"],
+div[data-testid="stChatInputContainer"] {
+    min-height: 68px !important;
+}
+/* 送出按鈕同步放大 */
+div[data-testid="stChatInput"] button,
+div[data-testid="stChatInputContainer"] button {
+    height: 44px !important;
+    width: 44px !important;
+    border-radius: 8px !important;
+}
+
+
+/* 側邊欄美化 (深水藍底色) */
+section[data-testid="stSidebar"] {
+    background-color: #519D9E !important; 
+}
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] .st-emotion-cache-1629p8f {
+    color: #ffffff !important;
+}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #D1B6E1 !important; /* 薰衣草紫 */
+}
+
+/* Metric 卡片 */
+div[data-testid="stMetric"] {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-top: 4px solid #58C9B9; /* 亮水藍色裝飾頂邊 */
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+div[data-testid="stMetric"] label {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* Tab 標籤美化 */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    background-color: #f0f2f6;
+    border-radius: 8px;
+    padding: 4px;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 500;
+    color: #495057;
+}
+.stTabs [aria-selected="true"] {
+    background-color: #ffffff;
+    color: #58C9B9 !important; /* 選中狀態字體為亮水藍色 */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    border-bottom: 2px solid #58C9B9 !important;
+}
+
+/* 按鈕統一風格 */
+.stButton > button {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 1px solid #e0e0e0;
+}
+.stButton > button:hover {
+    border-color: #58C9B9;
+    color: #58C9B9;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+/* Primary Button (主按鈕) */
+.stButton > button[kind="primary"] {
+    background-color: #58C9B9 !important; /* 亮水藍色主按鈕 */
+    color: #ffffff !important;
+    border: none;
+}
+.stButton > button[kind="primary"]:hover {
+    background-color: #9DC8C8 !important; /* 淺水藍色 Hover */
+}
+
+/* 側邊欄按鈕特別處理 */
+section[data-testid="stSidebar"] .stButton > button {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: #D1B6E1;
+    color: #D1B6E1;
+}
+
+/* 修正側邊欄檔案上傳區的字體顏色 (因為底色是淺色的，文字不能是白色) */
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] label,
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p,
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
+    color: #495057 !important;
+}
+
+/* Expander 樣式 */
+.streamlit-expanderHeader {
+    border-radius: 6px;
+    font-weight: 500;
+    color: #519D9E;
+}
+
+/* 表格美化 */
+.stDataFrame {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* 分隔線淡化 */
+hr {
+    border-color: #e9ecef !important;
+    margin: 1rem 0 !important;
+}
+
+/* 全域主色調文字 */
+.main h1, .main h2, .main h3, .main h4 {
+    color: #519D9E !important;
+}
+
+/* 頁腳 */
+footer {
+    font-size: 0.8rem;
+    color: #adb5bd;
+}
+
+/* === ML 工作流步驟按鈕 === */
+
+/* 所有工作流按鈕統一加鉛色左邊線 */
+section[data-testid="stSidebar"] [data-testid^="workflow_"] button,
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    text-align: left !important;
+    justify-content: flex-start !important;
+    border-left: 3px solid rgba(255,255,255,0.25) !important;
+    padding-left: 10px !important;
+    font-weight: 500;
+    transition: border-left-color 0.2s ease, background-color 0.2s ease;
+}
+
+/* Hover 時左邊線亮起 */
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    border-left-color: #D1B6E1 !important;
+    background-color: rgba(255,255,255,0.22) !important;
+}
+
+/* 側邊欄 caption 縮排 */
+section[data-testid="stSidebar"] .stCaptionContainer {
+    padding-left: 4px;
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.65) !important;
+}
+
+/* === Dark Mode 覆蓋 === */
+[data-theme="dark"] div[data-testid="stMetric"] {
+    background-color: #1a2634;
+    border-color: #2a3a4c;
+    border-top-color: #58C9B9;
+}
+[data-theme="dark"] .stTabs [data-baseweb="tab-list"] {
+    background-color: #1a2634;
+}
+[data-theme="dark"] .stTabs [aria-selected="true"] {
+    background-color: #2a3a4c;
+}
+[data-theme="dark"] .main h1, 
+[data-theme="dark"] .main h2, 
+[data-theme="dark"] .main h3, 
+[data-theme="dark"] .main h4 {
+    color: #9DC8C8 !important;
+}

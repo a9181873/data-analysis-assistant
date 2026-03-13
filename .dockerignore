@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.claude/
+data_assistant_env/
+storage/
+*.bat
+*.sh
+!entrypoint.sh
+.git/
+.gitignore
+README.md

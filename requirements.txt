@@ -1,0 +1,48 @@
+# Core web framework
+streamlit>=1.40.0
+
+# LangChain (modern 0.3.x API)
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-ollama>=0.3.0
+langgraph>=0.2.0
+langchain-openai>=0.3.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+chardet>=5.0.0
+# Note: sas7bdat removed — pandas.read_sas() handles SAS files natively
+
+# Statistics and ML
+scikit-learn>=1.5.0
+scipy>=1.11.0
+statsmodels>=0.14.0
+imbalanced-learn>=0.12.0
+
+# Gradient boosting
+xgboost>=2.0.0
+lightgbm>=4.3.0
+catboost>=1.2.0
+
+# Hyperparameter optimization
+optuna>=3.5.0
+
+# Model explainability
+shap>=0.43.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# RAG / Vector store
+chromadb>=0.5.0
+sentence-transformers>=3.0.0,<6.0.0
+# transformers 需與 sentence-transformers 相容 (sentence-transformers 5.x 要求 <5.0.0)
+transformers>=4.41.0,<5.0.0
+huggingface-hub>=0.34.0,<1.0
+
+# HTTP
+requests>=2.31.0
