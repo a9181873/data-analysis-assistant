@@ -7,7 +7,7 @@ import os
 # 推理模型 (推薦使用 DeepSeek-R1 以獲得最佳數理邏輯能力)
 #   - deepseek-r1:14b  ~9GB RAM，適合 16GB-32GB RAM 機器 (極致推理)
 #   - qwen2.5:14b      備用通用模型
-LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-r1:14b")
+LLM_MODEL = os.environ.get("LLM_MODEL", "qwen2.5:14b")
 
 # --- 雲端 API 部署配置 (Strategy C) ---
 # 若上百人使用，建議改接 DeepSeek 官方 API (非常便宜)

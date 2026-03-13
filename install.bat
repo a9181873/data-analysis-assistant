@@ -31,7 +31,7 @@ echo ===================================
 echo.
 echo Next steps:
 echo   1. Install Ollama: https://ollama.ai/
-echo   2. Pull model: ollama pull deepseek-r1:14b
+echo   2. Pull model: ollama pull qwen2.5:14b
 echo   3. Run: double-click start.bat
 echo.
 pause

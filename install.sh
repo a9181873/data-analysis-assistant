@@ -27,5 +27,5 @@ echo "==================================="
 echo
 echo "下一步:"
 echo "  1. 安裝 Ollama: https://ollama.ai/"
-echo "  2. 下載模型: ollama pull deepseek-r1:14b"
+echo "  2. Pull model: ollama pull qwen2.5:14b"
 echo "  3. 啟動: ./start.sh"
