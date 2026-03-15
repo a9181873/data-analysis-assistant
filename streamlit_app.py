@@ -271,13 +271,19 @@ def _ask_llm(question: str) -> str:
             st.session_state._agent_df_id = df_id
 
         # ── 建構對話歷史 (最近 10 輪) ──
+        # 過濾掉系統自動產生的訊息（資料摘要、模組切換引導等），避免 LLM 模仿
+        _SYSTEM_MSG_MARKERS = ["Step 1 完成", "已進入 **", "已切換至 **"]
         history_messages = []
         recent = st.session_state.messages[-20:]  # 最多取最近 20 則 (10 輪)
         for msg in recent:
+            content = msg["content"]
+            # 跳過系統自動產生的 assistant 訊息
+            if msg["role"] == "assistant" and any(m in content for m in _SYSTEM_MSG_MARKERS):
+                continue
             if msg["role"] == "user":
-                history_messages.append(("user", msg["content"]))
+                history_messages.append(("user", content))
             elif msg["role"] == "assistant":
-                history_messages.append(("assistant", msg["content"]))
+                history_messages.append(("assistant", content))
 
         # ── 注入數據上下文 ──
         data_context = _build_data_context()
