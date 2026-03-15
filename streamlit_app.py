@@ -221,8 +221,44 @@ def _add_msg(role: str, content: str):
     st.session_state.messages.append({"role": role, "content": content})
 
 
+def _build_data_context() -> str:
+    """根據目前載入的 DataFrame 建立數據摘要上下文。"""
+    df = st.session_state.df
+    if df is None:
+        return ""
+
+    n_rows, n_cols = df.shape
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    missing_total = int(df.isnull().sum().sum())
+
+    col_info = []
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        n_miss = int(df[col].isnull().sum())
+        col_info.append(f"  - {col} (型態: {dtype}, 缺失: {n_miss})")
+
+    context = (
+        f"\n--- 目前載入的資料摘要 ---\n"
+        f"資料筆數: {n_rows} 筆, 變數數量: {n_cols} 個\n"
+        f"數值型欄位 ({len(numeric_cols)}): {', '.join(numeric_cols)}\n"
+        f"類別型欄位 ({len(cat_cols)}): {', '.join(cat_cols) if cat_cols else '無'}\n"
+        f"總缺失值: {missing_total}\n"
+        f"欄位清單:\n" + "\n".join(col_info)
+    )
+
+    # 加入欄位說明 (如果有)
+    descriptions = st.session_state.get("column_descriptions", {})
+    valid = {k: v for k, v in descriptions.items() if v and v.strip()}
+    if valid:
+        desc_lines = "\n".join(f"  - {col}: {desc}" for col, desc in valid.items())
+        context += f"\n\n欄位業務說明:\n{desc_lines}"
+
+    return context
+
+
 def _ask_llm(question: str) -> str:
-    """呼叫 LangGraph Agent 產生真正的 AI 回應（含工具呼叫能力）。"""
+    """呼叫 LangGraph Agent 產生顧問式 AI 回應（含對話歷史 + 數據上下文）。"""
     import re
     try:
         # 確保 agent 已建立
@@ -234,8 +270,22 @@ def _ask_llm(question: str) -> str:
             st.session_state.agent_executor = create_agent_executor(df)
             st.session_state._agent_df_id = df_id
 
-        # RAG 增強
+        # ── 建構對話歷史 (最近 10 輪) ──
+        history_messages = []
+        recent = st.session_state.messages[-20:]  # 最多取最近 20 則 (10 輪)
+        for msg in recent:
+            if msg["role"] == "user":
+                history_messages.append(("user", msg["content"]))
+            elif msg["role"] == "assistant":
+                history_messages.append(("assistant", msg["content"]))
+
+        # ── 注入數據上下文 ──
+        data_context = _build_data_context()
         augmented = question
+        if data_context:
+            augmented = f"{data_context}\n\n使用者問題: {question}"
+
+        # ── RAG 增強 ──
         try:
             from rag_manager import get_chroma_collection, query_rag
             _, collection = get_chroma_collection()
@@ -243,25 +293,15 @@ def _ask_llm(question: str) -> str:
                 context = query_rag(question, collection, n_results=3)
                 if context != "找不到相關文檔。":
                     augmented = (
-                        f"以下是知識庫中的參考資料:\n{context}\n\n"
-                        f"根據以上參考資料和你的知識，回答以下問題:\n{question}"
+                        f"以下是知識庫中的參考資料:\n{context}\n\n{augmented}"
                     )
         except Exception:
             pass
 
-        # 注入欄位說明
-        descriptions = st.session_state.get("column_descriptions", {})
-        valid = {k: v for k, v in descriptions.items() if v and v.strip()}
-        if valid:
-            desc_lines = "\n".join(f"  - {col}: {desc}" for col, desc in valid.items())
-            augmented = (
-                f"以下是此資料集中各欄位的業務說明:\n{desc_lines}\n\n"
-                f"請根據以上欄位說明來回答以下問題:\n{augmented}"
-            )
-
-        # 呼叫 agent
+        # ── 呼叫 agent (含歷史) ──
         agent = st.session_state.agent_executor
-        result = agent.invoke({"messages": [("user", augmented)]})
+        all_messages = history_messages + [("user", augmented)]
+        result = agent.invoke({"messages": all_messages})
 
         # 取出最後一則 AI 回覆
         messages = result.get("messages", [])
@@ -462,10 +502,14 @@ with col_chat:
             col = sg1 if i % 2 == 0 else sg2
             if col.button(btn_label, key=f"suggest_{i}", use_container_width=True):
                 _add_msg("user", btn_text)
-                module_key, reply = route_intent(btn_text)
-                _add_msg("assistant", reply)
+                # 靜默導流到對應模組
+                module_key, _ = route_intent(btn_text)
                 if module_key:
                     st.session_state.active_module = module_key
+                # 呼叫 LLM 產生顧問式回應
+                with st.spinner("AI 顧問分析中..."):
+                    llm_reply = _ask_llm(btn_text)
+                _add_msg("assistant", llm_reply)
                 st.rerun()
 
     # 對話輸入框
@@ -475,14 +519,15 @@ with col_chat:
         if st.session_state.df is None:
             _add_msg("assistant", "⚠️ 尚未載入資料。請先從側邊欄上傳數據文件或使用範例數據！")
         else:
-            module_key, reply = route_intent(prompt)
+            # 1. 偵測模組意圖 → 自動導流（靜默，不產生罐頭回覆）
+            module_key, _ = route_intent(prompt)
             if module_key:
-                # 匹配到特定模組 → 導流 + 罐頭引導
-                _add_msg("assistant", reply)
                 st.session_state.active_module = module_key
-            else:
-                # 未匹配模組 → 呼叫 LLM 產生真正的 AI 回應
-                _add_msg("assistant", _ask_llm(prompt))
+
+            # 2. 一律呼叫 LLM → 產生顧問式回應
+            with st.spinner("AI 顧問分析中..."):
+                llm_reply = _ask_llm(prompt)
+            _add_msg("assistant", llm_reply)
 
         st.rerun()
 

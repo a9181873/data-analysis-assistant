@@ -5,6 +5,7 @@ LangChain Agent 模組
 
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import Tool
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
 
 import config
@@ -16,6 +17,39 @@ from data_analysis import (
     perform_chi_square_test, perform_anova, perform_correlation_analysis
 )
 from rag_manager import get_chroma_collection, query_rag
+
+# ═══════════════════════════════════════════════
+# 顧問式 System Prompt
+# ═══════════════════════════════════════════════
+CONSULTANT_SYSTEM_PROMPT = """你是一位資深的數據分析顧問，擁有豐富的統計分析、機器學習和商業分析經驗。
+你的任務是協助使用者進行數據分析，像一位耐心的顧問一樣提供指導。
+
+## 你的角色定位
+- 你是「數據分析導師」，不是簡單的指令執行器
+- 根據使用者的**具體問題**給出有針對性的回答，而非罐頭訊息
+- 用繁體中文回覆，語氣專業但親切
+
+## 回覆原則
+1. **針對性回答**：根據使用者的問題和資料內容給出具體建議，例如使用者問「我該分析什麼」，你要看他的欄位來建議
+2. **解釋為什麼**：不只告訴使用者做什麼，還要解釋為什麼這樣做有意義
+3. **舉例說明**：用使用者實際的資料欄位來舉例，而不是抽象的說明
+4. **建議下一步**：每次回覆末尾，簡短建議 1-2 個可以繼續的分析方向
+5. **簡潔精準**：避免過長的回覆，重點突出，用列點整理
+6. **連貫對話**：記住之前的對話內容，保持分析脈絡的連續性
+
+## 可用的分析模組
+使用者可以在右側面板使用以下工具，你可以引導他們：
+- 📋 數據預覽：查看資料概況
+- 🔬 變數分析：處理缺失值、型態轉換、離群值
+- 📊 資料圖表化：散點圖、直方圖、箱型圖等互動圖表
+- 📐 統計分析：t 檢定、ANOVA、相關分析、WOE/IV
+- 🤖 機器學習：Random Forest、XGBoost、LightGBM 等模型訓練
+- 📡 模型監控 (PSI)：追蹤模型穩定性
+
+## 注意事項
+- 如果使用者的問題不明確，主動詢問而不是猜測
+- 如果提到統計概念，用淺顯的方式解釋
+- 不要只是說「已開啟某某模組」，要根據問題回答"""
 
 import pandas as pd
 
@@ -180,6 +214,7 @@ def create_agent_executor(df: pd.DataFrame = None):
     """
     創建並返回 LangGraph ReAct Agent (或 Fallback Runnable)。
     若模型不支援 Tool Calling (如 deepseek-r1)，會退化為純問答模式。
+    注入 CONSULTANT_SYSTEM_PROMPT 使 AI 扮演數據分析顧問角色。
     """
     tools = make_tools(df)
 
@@ -190,7 +225,7 @@ def create_agent_executor(df: pd.DataFrame = None):
             api_key=config.DEEPSEEK_API_KEY,
             base_url=config.DEEPSEEK_BASE_URL,
         )
-        return create_react_agent(llm, tools)
+        return create_react_agent(llm, tools, state_modifier=CONSULTANT_SYSTEM_PROMPT)
     else:
         llm = ChatOllama(
             model=config.LLM_MODEL,
@@ -201,7 +236,7 @@ def create_agent_executor(df: pd.DataFrame = None):
         try:
             # 測試模型是否支援 bind_tools
             llm.bind_tools(tools)
-            return create_react_agent(llm, tools)
+            return create_react_agent(llm, tools, state_modifier=CONSULTANT_SYSTEM_PROMPT)
         except Exception as e:
             # 模型不支援 Tools (如 DeepSeek-R1 in Ollama)
             # 建立一個簡單的 Runnable 來模擬 agent 的 IO 格式
@@ -209,7 +244,9 @@ def create_agent_executor(df: pd.DataFrame = None):
             
             def fallback_chain(state: dict) -> dict:
                 messages = state.get("messages", [])
-                response = llm.invoke(messages)
+                # 注入顧問式 System Prompt
+                full_messages = [SystemMessage(content=CONSULTANT_SYSTEM_PROMPT)] + messages
+                response = llm.invoke(full_messages)
                 # 模擬 LangGraph 狀態回傳格式
                 return {"messages": messages + [response]}
             
