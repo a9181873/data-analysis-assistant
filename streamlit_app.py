@@ -222,7 +222,7 @@ def _add_msg(role: str, content: str):
 
 
 def _build_data_context() -> str:
-    """根據目前載入的 DataFrame 建立數據摘要上下文。"""
+    """根據目前載入的 DataFrame 建立精簡的數據摘要（限制最多 15 個欄位以節省 Token）。"""
     df = st.session_state.df
     if df is None:
         return ""
@@ -232,28 +232,19 @@ def _build_data_context() -> str:
     cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
     missing_total = int(df.isnull().sum().sum())
 
-    col_info = []
-    for col in df.columns:
-        dtype = str(df[col].dtype)
-        n_miss = int(df[col].isnull().sum())
-        col_info.append(f"  - {col} (型態: {dtype}, 缺失: {n_miss})")
+    MAX_COLS = 15
+    shown_cols = list(df.columns[:MAX_COLS])
+    col_names = ', '.join(shown_cols)
+    if n_cols > MAX_COLS:
+        col_names += f' ... (共 {n_cols} 欄)'
 
     context = (
-        f"\n--- 目前載入的資料摘要 ---\n"
-        f"資料筆數: {n_rows} 筆, 變數數量: {n_cols} 個\n"
-        f"數值型欄位 ({len(numeric_cols)}): {', '.join(numeric_cols)}\n"
-        f"類別型欄位 ({len(cat_cols)}): {', '.join(cat_cols) if cat_cols else '無'}\n"
-        f"總缺失值: {missing_total}\n"
-        f"欄位清單:\n" + "\n".join(col_info)
+        f"資料: {n_rows} 筆 x {n_cols} 欄\n"
+        f"數值欄位({len(numeric_cols)}): {', '.join(numeric_cols[:MAX_COLS])}\n"
+        f"類別欄位({len(cat_cols)}): {', '.join(cat_cols[:MAX_COLS]) if cat_cols else '無'}\n"
+        f"缺失值: {missing_total}\n"
+        f"欄位: {col_names}"
     )
-
-    # 加入欄位說明 (如果有)
-    descriptions = st.session_state.get("column_descriptions", {})
-    valid = {k: v for k, v in descriptions.items() if v and v.strip()}
-    if valid:
-        desc_lines = "\n".join(f"  - {col}: {desc}" for col, desc in valid.items())
-        context += f"\n\n欄位業務說明:\n{desc_lines}"
-
     return context
 
 
@@ -274,7 +265,7 @@ def _ask_llm(question: str) -> str:
         # 過濾掉系統自動產生的訊息（資料摘要、模組切換引導等），避免 LLM 模仿
         _SYSTEM_MSG_MARKERS = ["Step 1 完成", "已進入 **", "已切換至 **"]
         history_messages = []
-        recent = st.session_state.messages[-20:]  # 最多取最近 20 則 (10 輪)
+        recent = st.session_state.messages[-10:]  # 最多取最近 10 則 (5 輪)
         for msg in recent:
             content = msg["content"]
             # 跳過系統自動產生的 assistant 訊息
