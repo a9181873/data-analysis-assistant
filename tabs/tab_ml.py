@@ -155,6 +155,9 @@ def render(df: pd.DataFrame):
 
 def _render_single_model(df, current_models, target_col, feature_cols,
                          test_size, task_type, is_regression, balance_strategy, raw_df=None):
+    if "ml_results_single" not in st.session_state:
+        st.session_state.ml_results_single = None
+
     model_name = st.selectbox("選擇模型", list(current_models.keys()))
 
     if st.button("開始訓練", key="train_single"):
@@ -176,29 +179,55 @@ def _render_single_model(df, current_models, target_col, feature_cols,
                 if is_regression:
                     res = train_regression_model(
                         model_name, X_train_df, y_train, X_test_df, y_test)
-                    _show_regression_results_full(res, model_name, feature_names_out,
-                                                 X_train_df, X_test_df, preprocessor=preprocessor,
-                                                 code_params=dict(target_col=target_col,
-                                                     feature_cols=feature_cols, task_type=task_type,
-                                                     model_name=model_name, balance_strategy=balance_strategy,
-                                                     test_size=test_size, file_fmt=file_fmt))
+                    
+                    st.session_state.ml_results_single = {
+                        "type": "regression", "res": res, "model_name": model_name,
+                        "feature_names_out": feature_names_out, "X_train_df": X_train_df,
+                        "X_test_df": X_test_df, "preprocessor": preprocessor,
+                        "code_params": dict(target_col=target_col, feature_cols=feature_cols,
+                                            task_type=task_type, model_name=model_name,
+                                            balance_strategy=balance_strategy, test_size=test_size,
+                                            file_fmt=file_fmt)
+                    }
                 else:
                     X_train_bal, y_train_bal = apply_balancing(
                         X_train_df, y_train, balance_strategy)
-                    if balance_strategy != "none":
-                        st.info(f"平衡前: {len(y_train)} 筆 -> 平衡後: {len(y_train_bal)} 筆")
+                    msg = f"平衡前: {len(y_train)} 筆 -> 平衡後: {len(y_train_bal)} 筆" if balance_strategy != "none" else None
 
                     res = train_single_model(
                         model_name, X_train_bal, y_train_bal, X_test_df, y_test, le)
-                    _show_classification_results(res, model_name, feature_names_out, le,
-                                                X_train_bal, X_test_df, y_test, preprocessor=preprocessor,
-                                                code_params=dict(target_col=target_col,
-                                                    feature_cols=feature_cols, task_type=task_type,
-                                                    model_name=model_name, balance_strategy=balance_strategy,
-                                                    test_size=test_size, file_fmt=file_fmt))
+                    
+                    st.session_state.ml_results_single = {
+                        "type": "classification", "res": res, "model_name": model_name,
+                        "feature_names_out": feature_names_out, "le": le,
+                        "X_train_bal": X_train_bal, "X_test_df": X_test_df, "y_test": y_test,
+                        "preprocessor": preprocessor, "balance_msg": msg,
+                        "code_params": dict(target_col=target_col, feature_cols=feature_cols,
+                                            task_type=task_type, model_name=model_name,
+                                            balance_strategy=balance_strategy, test_size=test_size,
+                                            file_fmt=file_fmt)
+                    }
 
             except Exception as e:
                 st.error(f"訓練失敗: {str(e)}")
+                st.session_state.ml_results_single = None
+
+    if st.session_state.ml_results_single is not None:
+        r = st.session_state.ml_results_single
+        if r.get("type") == "regression":
+            _show_regression_results_full(
+                r["res"], r["model_name"], r["feature_names_out"],
+                r["X_train_df"], r["X_test_df"], preprocessor=r["preprocessor"],
+                code_params=r["code_params"]
+            )
+        elif r.get("type") == "classification":
+            if r.get("balance_msg"):
+                st.info(r["balance_msg"])
+            _show_classification_results(
+                r["res"], r["model_name"], r["feature_names_out"], r["le"],
+                r["X_train_bal"], r["X_test_df"], r["y_test"], 
+                preprocessor=r["preprocessor"], code_params=r["code_params"]
+            )
 
 
 def _render_compare_models(df, current_models, target_col, feature_cols,
@@ -533,6 +562,7 @@ def _show_regression_results_full(res, model_name, feature_cols,
             except Exception as e:
                 st.warning(f"SHAP 計算失敗: {e}")
 
+    # --- 模型匯出 ---
     _show_model_export(res, model_name, feature_cols, "regression", preprocessor=preprocessor)
 
     # --- 程式碼產生 ---
@@ -991,9 +1021,9 @@ _REGRESSION_ALGO_GUIDE = [
         "icon": "🚀",
         "summary": "XGBoost 的迴歸版本，支援正則化、缺失值處理、平行計算。",
         "how_it_works": "與分類版相同，但損失函數改為 MSE，輸出為連續值。",
-        "good_for": ["結構化數據迴歸的首選", "需要高精度", "大數據集"],
-        "not_good_for": ["超小數據集", "外推預測"],
-        "tips": "同分類版建議：learning_rate=0.01~0.1, max_depth=3~8, 搭配 early_stopping。",
+        "good_for": ["大數據集", "需要高精度預測", "複雜特徵互動"],
+        "not_good_for": ["極小數據集", "類別特徵未經適當轉換", "嚴格要求可解釋性的場合"],
+        "tips": "注意調整 learning_rate 和 max_depth。處理過擬合可以加入正則化。",
         "complexity": "中等",
     },
     {

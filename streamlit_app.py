@@ -106,6 +106,7 @@ _defaults = {
     "messages": [],
     "active_module": None,
     "data_profiled": False,
+    "last_uploaded_file": None,
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -369,21 +370,24 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 if uploaded_file is not None:
-    import tempfile
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp:
-            tmp.write(uploaded_file.getbuffer())
-            tmp_path = tmp.name
-        df = load_data(tmp_path)
-        st.session_state.df = df
-        st.session_state.data_profiled = False
-        st.sidebar.success(f"成功載入 {uploaded_file.name}")
-    except Exception as e:
-        st.sidebar.error(f"載入失敗: {str(e)}")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    current_file_info = (uploaded_file.name, uploaded_file.size)
+    if st.session_state.get("last_uploaded_file") != current_file_info:
+        import tempfile
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp:
+                tmp.write(uploaded_file.getbuffer())
+                tmp_path = tmp.name
+            df = load_data(tmp_path)
+            st.session_state.df = df
+            st.session_state.data_profiled = False
+            st.session_state.last_uploaded_file = current_file_info
+            st.sidebar.success(f"成功載入 {uploaded_file.name}")
+        except Exception as e:
+            st.sidebar.error(f"載入失敗: {str(e)}")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 # 資料摘要
 if st.session_state.df is not None:
@@ -403,6 +407,7 @@ if st.sidebar.button("🚀 使用範例數據", use_container_width=True):
     })
     st.session_state.df = sample_data
     st.session_state.data_profiled = False
+    st.session_state.last_uploaded_file = "sample_data"
     st.rerun()
 
 # ── ML 分析流程 (Step-by-Step) ──
