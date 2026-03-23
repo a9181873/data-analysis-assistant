@@ -8,7 +8,7 @@ import os
 #   - deepseek-r1:14b  ~9GB RAM，適合 16GB-32GB RAM 機器 (極致推理)
 #   - qwen2.5:14b      備用通用模型
 #   - qwen2.5:7b       輕量版模型，速度最快
-LLM_MODEL = os.environ.get("LLM_MODEL", "qwen2.5:14b")
+LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-r1:7b")
 
 # --- 雲端 API 部署配置 (Strategy C) ---
 # 若上百人使用，建議改接 DeepSeek 官方 API (非常便宜)

@@ -43,12 +43,17 @@ def render(df: pd.DataFrame):
     # 任務類型選擇
     task_type_label = st.radio(
         "選擇任務類型",
-        ["分類 (Classification)", "迴歸 (Regression)"],
+        ["分類 (Classification)", "迴歸 (Regression)", "分群 (Clustering)"],
         horizontal=True,
         key="ml_task_type"
     )
     is_regression = "迴歸" in task_type_label
-    task_type = config.ML_TASK_REGRESSION if is_regression else config.ML_TASK_CLASSIFICATION
+    is_clustering = "分群" in task_type_label
+    
+    if is_clustering:
+        task_type = "clustering"
+    else:
+        task_type = config.ML_TASK_REGRESSION if is_regression else config.ML_TASK_CLASSIFICATION
 
     ml_mode = st.radio(
         "選擇模式",
@@ -63,17 +68,23 @@ def render(df: pd.DataFrame):
     st.write("**數據設定**")
     c1, c2 = st.columns(2)
     with c1:
-        target_col = st.selectbox(
-            "目標變數 (Y)", all_cols,
-            help="分類：選擇類別欄位；迴歸：選擇數值欄位"
-        )
+        if is_clustering:
+            st.info("分群為非監督式學習，不需選擇目標變數 (Y)")
+            target_col = None
+            available_features = all_cols
+        else:
+            target_col = st.selectbox(
+                "目標變數 (Y)", all_cols,
+                help="分類：選擇類別欄位；迴歸：選擇數值欄位"
+            )
+            available_features = [c for c in all_cols if c != target_col]
+            
     with c2:
-        available_features = [c for c in all_cols if c != target_col]
         feature_cols = st.multiselect("特徵變數 (X)", available_features,
                                       default=available_features)
 
     # 不平衡數據處理（只在分類任務顯示）
-    if not is_regression:
+    if not is_regression and not is_clustering:
         st.write("**不平衡數據處理**")
         c3, c4 = st.columns(2)
         with c3:
@@ -119,7 +130,10 @@ def render(df: pd.DataFrame):
     st.markdown("---")
 
     # 取得當前模型列表
-    if is_regression:
+    if is_clustering:
+        from ml_models import get_clustering_models
+        current_models = get_clustering_models()
+    elif is_regression:
         current_models = get_regression_models()
     else:
         current_models = get_balanced_models(balance_strategy)
@@ -127,7 +141,7 @@ def render(df: pd.DataFrame):
     # --- 單模型訓練 ---
     if ml_mode == "單模型訓練":
         _render_single_model(df, current_models, target_col, feature_cols,
-                             test_size, task_type, is_regression, balance_strategy,
+                             test_size, task_type, is_regression, is_clustering, balance_strategy,
                              raw_df=df)
 
     # --- 多模型比較 ---
@@ -150,15 +164,56 @@ def render(df: pd.DataFrame):
 
     # --- 演算法解說 ---
     elif ml_mode == "📖 演算法解說":
-        _render_algorithm_guide(is_regression)
+        _render_algorithm_guide(is_regression, is_clustering)
 
+
+def _show_model_explanation(model_name, is_regression, is_clustering):
+    """根據選擇的模型，顯示包含資料來源的深度解說面板"""
+    if is_clustering:
+        guide_list = _CLUSTERING_ALGO_GUIDE
+    elif is_regression:
+        guide_list = _REGRESSION_ALGO_GUIDE
+    else:
+        guide_list = _CLASSIFICATION_ALGO_GUIDE
+        
+    model_base_name = model_name.split(" (")[0] if " (" in model_name else model_name
+    
+    matching_guide = None
+    for guide in guide_list:
+        if model_base_name.lower() in guide['name'].lower():
+            matching_guide = guide
+            break
+            
+    if matching_guide:
+        with st.expander(f"📖 暸解 {matching_guide['name']} 的用法與案例"):
+            st.markdown(f"**一句話描述：** {matching_guide['summary']}")
+            st.markdown("---")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**🔬 原理**")
+                st.markdown(matching_guide['how_it_works'])
+                st.markdown("**✅ 適合場景**")
+                for s in matching_guide['good_for']:
+                    st.markdown(f"- {s}")
+            with c2:
+                st.markdown("**⚠️ 不適合 / 限制**")
+                for s in matching_guide['not_good_for']:
+                    st.markdown(f"- {s}")
+                st.markdown("**💡 實務建議與案例**")
+                st.markdown(matching_guide['tips'])
+            st.markdown("---")
+            ref = matching_guide.get('reference', '[Scikit-Learn 官方教學文件](https://scikit-learn.org/stable/)')
+            st.markdown(f"**📚 資料來源與延伸閱讀：** {ref}")
 
 def _render_single_model(df, current_models, target_col, feature_cols,
-                         test_size, task_type, is_regression, balance_strategy, raw_df=None):
+                         test_size, task_type, is_regression, is_clustering, balance_strategy, raw_df=None):
     if "ml_results_single" not in st.session_state:
         st.session_state.ml_results_single = None
 
     model_name = st.selectbox("選擇模型", list(current_models.keys()))
+    
+    # 呈現模型深度解說
+    _show_model_explanation(model_name, is_regression, is_clustering)
 
     if st.button("開始訓練", key="train_single"):
         if not feature_cols:
@@ -167,46 +222,78 @@ def _render_single_model(df, current_models, target_col, feature_cols,
 
         with st.spinner("模型訓練中..."):
             try:
-                X_train_df, X_test_df, y_train, y_test, le, preprocessor = prepare_data(
-                    df, target_col, feature_cols, test_size, task_type)
-                
-                # Get clean feature names if using ColumnTransformer
-                feature_names_out = X_train_df.columns.tolist() if isinstance(X_train_df, pd.DataFrame) else feature_cols
+                if is_clustering:
+                    from ml_models import train_clustering_model
+                    from sklearn.preprocessing import StandardScaler
+                    df_cluster = df[feature_cols].copy().dropna()
+                    if df_cluster.empty:
+                        st.error("特徵包含空值且清理後無可用資料")
+                        return
 
-                # 偵測原始資料格式（供 code generator 使用）
-                file_fmt = "csv"
-
-                if is_regression:
-                    res = train_regression_model(
-                        model_name, X_train_df, y_train, X_test_df, y_test)
+                    # 對特徵進行處理(數值型標準化，類別型OneHot)
+                    cat_cols = df_cluster.select_dtypes(include=['object', 'category']).columns.tolist()
+                    num_cols = df_cluster.select_dtypes(include=['number']).columns.tolist()
+                    from sklearn.compose import ColumnTransformer
+                    from sklearn.preprocessing import OneHotEncoder
                     
+                    preprocessor = ColumnTransformer(
+                        transformers=[
+                            ('num', StandardScaler(), num_cols),
+                            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), cat_cols)
+                        ],
+                        remainder='passthrough'
+                    )
+                    X_scaled = preprocessor.fit_transform(df_cluster)
+                    
+                    # 取得特徵名
+                    feature_names = preprocessor.get_feature_names_out()
+                    clean_feature_names = [f.split('__', 1)[1] if '__' in f else f for f in feature_names]
+                    X_df = pd.DataFrame(X_scaled, columns=clean_feature_names, index=df_cluster.index)
+                    
+                    res = train_clustering_model(model_name, X_df)
                     st.session_state.ml_results_single = {
-                        "type": "regression", "res": res, "model_name": model_name,
-                        "feature_names_out": feature_names_out, "X_train_df": X_train_df,
-                        "X_test_df": X_test_df, "preprocessor": preprocessor,
-                        "code_params": dict(target_col=target_col, feature_cols=feature_cols,
-                                            task_type=task_type, model_name=model_name,
-                                            balance_strategy=balance_strategy, test_size=test_size,
-                                            file_fmt=file_fmt)
+                        "type": "clustering", "res": res, "model_name": model_name,
+                        "X_df": X_df
                     }
                 else:
-                    X_train_bal, y_train_bal = apply_balancing(
-                        X_train_df, y_train, balance_strategy)
-                    msg = f"平衡前: {len(y_train)} 筆 -> 平衡後: {len(y_train_bal)} 筆" if balance_strategy != "none" else None
-
-                    res = train_single_model(
-                        model_name, X_train_bal, y_train_bal, X_test_df, y_test, le)
+                    X_train_df, X_test_df, y_train, y_test, le, preprocessor = prepare_data(
+                        df, target_col, feature_cols, test_size, task_type)
                     
-                    st.session_state.ml_results_single = {
-                        "type": "classification", "res": res, "model_name": model_name,
-                        "feature_names_out": feature_names_out, "le": le,
-                        "X_train_bal": X_train_bal, "X_test_df": X_test_df, "y_test": y_test,
-                        "preprocessor": preprocessor, "balance_msg": msg,
-                        "code_params": dict(target_col=target_col, feature_cols=feature_cols,
-                                            task_type=task_type, model_name=model_name,
-                                            balance_strategy=balance_strategy, test_size=test_size,
-                                            file_fmt=file_fmt)
-                    }
+                    feature_names_out = X_train_df.columns.tolist() if isinstance(X_train_df, pd.DataFrame) else feature_cols
+                    file_fmt = "csv"
+
+                    if is_regression:
+                        from ml_models import train_regression_model
+                        res = train_regression_model(
+                            model_name, X_train_df, y_train, X_test_df, y_test)
+                        
+                        st.session_state.ml_results_single = {
+                            "type": "regression", "res": res, "model_name": model_name,
+                            "feature_names_out": feature_names_out, "X_train_df": X_train_df,
+                            "X_test_df": X_test_df, "preprocessor": preprocessor,
+                            "code_params": dict(target_col=target_col, feature_cols=feature_cols,
+                                                task_type=task_type, model_name=model_name,
+                                                balance_strategy=balance_strategy, test_size=test_size,
+                                                file_fmt=file_fmt)
+                        }
+                    else:
+                        X_train_bal, y_train_bal = apply_balancing(
+                            X_train_df, y_train, balance_strategy)
+                        msg = f"平衡前: {len(y_train)} 筆 -> 平衡後: {len(y_train_bal)} 筆" if balance_strategy != "none" else None
+
+                        res = train_single_model(
+                            model_name, X_train_bal, y_train_bal, X_test_df, y_test, le)
+                        
+                        st.session_state.ml_results_single = {
+                            "type": "classification", "res": res, "model_name": model_name,
+                            "feature_names_out": feature_names_out, "le": le,
+                            "X_train_bal": X_train_bal, "X_test_df": X_test_df, "y_test": y_test,
+                            "preprocessor": preprocessor, "balance_msg": msg,
+                            "code_params": dict(target_col=target_col, feature_cols=feature_cols,
+                                                task_type=task_type, model_name=model_name,
+                                                balance_strategy=balance_strategy, test_size=test_size,
+                                                file_fmt=file_fmt)
+                        }
 
             except Exception as e:
                 st.error(f"訓練失敗: {str(e)}")
@@ -228,6 +315,8 @@ def _render_single_model(df, current_models, target_col, feature_cols,
                 r["X_train_bal"], r["X_test_df"], r["y_test"], 
                 preprocessor=r["preprocessor"], code_params=r["code_params"]
             )
+        elif r.get("type") == "clustering":
+            _show_clustering_results(r["res"], r["model_name"], r["X_df"])
 
 
 def _render_compare_models(df, current_models, target_col, feature_cols,
@@ -536,6 +625,50 @@ def _show_classification_results(res, model_name, feature_cols, le,
         _show_code_generator(**code_params)
 
 
+def _show_clustering_results(res, model_name, X_df):
+    """展示分群結果 (Silhouette Score & PCA散佈圖)"""
+    st.success(f"{model_name} 分群訓練完成!")
+    m1, m2 = st.columns(2)
+    m1.metric("產出群數 (Clusters)", res['n_clusters'])
+    if res['silhouette_score'] is not None:
+        m2.metric("Silhouette Score (輪廓係數)", f"{res['silhouette_score']:.4f}")
+    else:
+        m2.metric("Silhouette Score", "N/A (太少群或雜訊過多)")
+        
+    if res['n_noise'] > 0:
+        st.warning(f"偵測到 {res['n_noise']} 個雜訊點 (Noise)。")
+
+    # PCA 2D 視覺化
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    import seaborn as sns
+    import pandas as pd
+    
+    st.write("**分群散佈圖 (PCA降維至 2D):**")
+    try:
+        if X_df.shape[1] > 2:
+            pca = PCA(n_components=2)
+            X_plot = pca.fit_transform(X_df)
+            x_label, y_label = "PCA Component 1", "PCA Component 2"
+        else:
+            X_plot = X_df.values
+            x_label, y_label = (X_df.columns[0], X_df.columns[1]) if X_df.shape[1] == 2 else ("Feature 1", "Feature 2")
+
+        plot_df = pd.DataFrame({
+            x_label: X_plot[:, 0],
+            y_label: X_plot[:, 1] if X_plot.shape[1] > 1 else 0,
+            'Cluster': [f"Cluster {int(l)}" if l != -1 else "Noise" for l in res['labels']]
+        })
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.scatterplot(data=plot_df, x=x_label, y=y_label, hue='Cluster', palette="tab10", ax=ax, alpha=0.7)
+        ax.set_title(f"{model_name} 空間分佈")
+        st.pyplot(fig)
+        plt.close()
+    except Exception as e:
+        st.warning(f"分群視覺化失敗: {e}")
+
+
 def _show_regression_results_full(res, model_name, feature_cols,
                                   X_train=None, X_test=None, preprocessor=None,
                                   code_params=None):
@@ -568,7 +701,6 @@ def _show_regression_results_full(res, model_name, feature_cols,
     # --- 程式碼產生 ---
     if code_params:
         _show_code_generator(**code_params)
-
 
 def _show_model_export(res, model_name, feature_cols, task_type, preprocessor=None):
     """顯示模型下載按鈕。"""
@@ -680,7 +812,7 @@ def _render_optuna(df, target_col, feature_cols, test_size, task_type, is_regres
                 st.error(f"Optuna 優化失敗: {str(e)}")
 
 
-def _render_algorithm_guide(is_regression):
+def _render_algorithm_guide(is_regression, is_clustering=False):
     """演算法解說面板 — 每個演算法的原理、適用場景、優缺點。"""
     st.markdown(
         """
@@ -697,7 +829,9 @@ def _render_algorithm_guide(is_regression):
         unsafe_allow_html=True,
     )
 
-    if is_regression:
+    if is_clustering:
+        _ALGO_GUIDE = _CLUSTERING_ALGO_GUIDE
+    elif is_regression:
         _ALGO_GUIDE = _REGRESSION_ALGO_GUIDE
     else:
         _ALGO_GUIDE = _CLASSIFICATION_ALGO_GUIDE
@@ -726,6 +860,9 @@ def _render_algorithm_guide(is_regression):
 
             if algo.get('complexity'):
                 st.caption(f"⏱️ 訓練速度：{algo['complexity']}")
+            
+            ref = algo.get('reference', '[Scikit-Learn 官方教學文件](https://scikit-learn.org/stable/)')
+            st.markdown(f"**📚 資料來源與延伸閱讀：** {ref}")
 
 
 # ── 分類演算法解說資料 ──────────────────────────────────────────────
@@ -1045,6 +1182,66 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["純數值特徵（優勢不明顯）", "極端速度要求"],
         "tips": "類別特徵多時首選。iterations 和 depth 是最重要的超參數。",
         "complexity": "中等",
+        "reference": "[CatBoost: unbiased boosting with categorical features (Prokhorenkova et al., 2018)](https://arxiv.org/abs/1706.09516)"
+    },
+    {
+        "name": "AdaBoost Regressor (適應性提升迴歸)",
+        "icon": "🔥",
+        "summary": "針對損失較大的樣本加大權重的迴歸模型集成。",
+        "how_it_works": "每輪訓練中，如果樣本殘差越大，在下一輪被抽樣與學習的機率就越高。",
+        "good_for": ["不容易發現極端值的數據"],
+        "not_good_for": ["資料中包含嚴重的雜訊點或離群值（會導致模型崩潰）"],
+        "tips": "適用於資料乾淨但有一些難以預測的 pattern 時。",
+        "complexity": "中等",
+        "reference": "[Improving Regressors using Boosting Techniques (Drucker, 1997)](https://www.semanticscholar.org/paper/Improving-Regressors-using-Boosting-Techniques-Drucker/16d7a468d669e46b9a8cf6feaf7f08c3ba26eeb7)"
+    },
+    {
+        "name": "Extra Trees Regressor (極度隨機樹迴歸)",
+        "icon": "🌲",
+        "summary": "比隨機森林更平滑、訓練更快的迴歸集成樹。",
+        "how_it_works": "結合 Bootstrap 以及特徵的隨機切分點，輸出為所有樹的平均。",
+        "good_for": ["減少Variance", "希望迴歸表面更平滑"],
+        "not_good_for": ["數據包含強烈的線性關係"],
+        "tips": "在某些 Kaggle 比賽中，ExtraTrees 在處理高維雜訊數據時往往優於 RandomForest。",
+        "complexity": "快",
+        "reference": "[Scikit-Learn Ensemble Methods](https://scikit-learn.org/stable/modules/ensemble.html)"
+    },
+    {
+        "name": "MLP Regressor (神經網路迴歸)",
+        "icon": "🧠",
+        "summary": "使用多層感知神經網路來擬合數值目標。",
+        "how_it_works": "透過隱藏層的激勵函數轉換，最後一層不加非線性激勵直接輸出連續數值，最小化 MSE。",
+        "good_for": ["超級複雜的非線性關係", "擁有強大算力的大量數據"],
+        "not_good_for": ["小數據集", "無法做標準化的資料"],
+        "tips": "**案例：溫度或股價趨勢預測** (若無時間序列依賴)。資料一定要 Scale。",
+        "complexity": "慢",
+        "reference": "[Scikit-Learn Neural Network Models](https://scikit-learn.org/stable/modules/neural_networks_supervised.html)"
+    },
+]
+
+# ── 分群演算法解說資料 ──────────────────────────────────────────────
+_CLUSTERING_ALGO_GUIDE = [
+    {
+        "name": "K-Means (K-平均算法)",
+        "icon": "🎯",
+        "summary": "最經典的分群法，將資料切分為預先定義的 K 個球狀群集。",
+        "how_it_works": "隨機初始化 K 個中心點，將每個點指派給最近的中心，然後重新計算中心，反覆迭代至收斂。",
+        "good_for": ["大數據集的分群", "已知大概要分幾群 (如高/中/低價值客戶)"],
+        "not_good_for": ["各群密度或大小差異極大的數據", "非球狀的分佈 (如環狀或月亮形)", "很多離群值"],
+        "tips": "**案例：RFM 客戶價值區分**。訓練前必須做標準化 (StandardScaler)，否則數值大的特徵會主導分群。",
+        "complexity": "極快",
+        "reference": "[MacQueen, 1967. Some methods for classification and analysis of multivariate observations](https://projecteuclid.org/journals/berkeley-symposium-on-mathematical-statistics-and-probability/volume-1/issue-1/Some-methods-for-classification-and-analysis-of-multivariate-observations/bspmat/119569766.full)"
+    },
+    {
+        "name": "DBSCAN (密度分群)",
+        "icon": "🌌",
+        "summary": "基於密度的分群方法，能找到任意形狀的群集並且自動排除雜訊。",
+        "how_it_works": "根據半徑 (eps) 和最少點數 (min_samples) 尋找核心點，並將連通的核心點擴散為一個群集。",
+        "good_for": ["未知要分幾群時", "含有大量雜訊或離群值的資料", "非球狀的奇特視覺形狀分佈"],
+        "not_good_for": ["不同群集密度差異極大", "高維度數據（維度詛咒會導致距離計算失去意義）"],
+        "tips": "**案例：地理位置熱點分析**。不需要給定 K 值，但 eps 的設定極其重要。被標記為 -1 的就是雜訊 (Noise)。",
+        "complexity": "中等",
+        "reference": "[Ester et al., 1996. A density-based algorithm for discovering clusters in large spatial databases with noise](https://www.aaai.org/Papers/KDD/1996/KDD96-037.pdf)"
     },
 ]
 

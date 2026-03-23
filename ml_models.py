@@ -6,9 +6,15 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso
+from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import (
+    RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor,
+    AdaBoostClassifier, AdaBoostRegressor, ExtraTreesClassifier, ExtraTreesRegressor
+)
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics import silhouette_score
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -100,6 +106,14 @@ def get_balanced_models(strategy="none"):
         "KNN (K-近鄰)": KNeighborsClassifier(n_neighbors=5),
         "Naive Bayes (樸素貝葉斯)": GaussianNB(),
         "LDA (線性判別分析)": LinearDiscriminantAnalysis(),
+        "AdaBoost (適應性提升)": AdaBoostClassifier(n_estimators=100, random_state=config.DEFAULT_RANDOM_STATE),
+        "Extra Trees (極度隨機樹)": ExtraTreesClassifier(
+            n_estimators=100, class_weight='balanced' if use_balanced else None,
+            random_state=config.DEFAULT_RANDOM_STATE
+        ),
+        "MLP (神經網路)": MLPClassifier(
+            hidden_layer_sizes=(100,), max_iter=500, random_state=config.DEFAULT_RANDOM_STATE
+        ),
     }
     if XGBOOST_AVAILABLE:
         models["XGBoost"] = XGBClassifier(
@@ -161,6 +175,7 @@ def get_regression_models():
         "Linear Regression (線性迴歸)": LinearRegression(),
         "Ridge Regression (嶺迴歸)": Ridge(alpha=1.0),
         "Lasso Regression": Lasso(alpha=1.0, max_iter=5000),
+        "ElasticNet Regression": ElasticNet(alpha=1.0, l1_ratio=0.5),
         "Decision Tree Regressor (決策樹迴歸)": DecisionTreeRegressor(
             random_state=config.DEFAULT_RANDOM_STATE
         ),
@@ -169,6 +184,15 @@ def get_regression_models():
         ),
         "Gradient Boosting Regressor (梯度提升迴歸)": GradientBoostingRegressor(
             n_estimators=100, random_state=config.DEFAULT_RANDOM_STATE
+        ),
+        "AdaBoost Regressor (適應性提升迴歸)": AdaBoostRegressor(
+            n_estimators=100, random_state=config.DEFAULT_RANDOM_STATE
+        ),
+        "Extra Trees Regressor (極度隨機樹迴歸)": ExtraTreesRegressor(
+            n_estimators=100, random_state=config.DEFAULT_RANDOM_STATE
+        ),
+        "MLP Regressor (神經網路迴歸)": MLPRegressor(
+            hidden_layer_sizes=(100,), max_iter=500, random_state=config.DEFAULT_RANDOM_STATE
         ),
     }
     if XGBOOST_AVAILABLE:
@@ -191,6 +215,44 @@ def get_regression_models():
         )
     return models
 
+def get_clustering_models():
+    """返回可用的分群模型清單。"""
+    return {
+        "K-Means (K-平均)": KMeans(n_clusters=3, random_state=config.DEFAULT_RANDOM_STATE, n_init='auto'),
+        "DBSCAN (密度分群)": DBSCAN(eps=0.5, min_samples=5),
+    }
+
+def train_clustering_model(model_name, X):
+    """
+    執行分群模型計算，返回 labels, silhouette_score (若可計算)。
+    """
+    models = get_clustering_models()
+    if model_name not in models:
+        raise ValueError(f"不支援的分群模型: {model_name}")
+    
+    from sklearn.base import clone
+    model = clone(models[model_name])
+    labels = model.fit_predict(X)
+    
+    # 計算 Silhouette Score
+    try:
+        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        from sklearn.metrics import silhouette_score
+        if 1 < n_clusters < len(X):
+            score = silhouette_score(X, labels)
+        else:
+            score = None
+    except:
+        score = None
+        
+    return {
+        'model_name': model_name,
+        'model': model,
+        'labels': labels,
+        'silhouette_score': score,
+        'n_clusters': len(set(labels)) - (1 if -1 in labels else 0),
+        'n_noise': list(labels).count(-1)
+    }
 
 # --- 超參數搜索空間 ---
 PARAM_GRIDS = {
@@ -202,6 +264,36 @@ PARAM_GRIDS = {
         'max_depth': [None, 5, 10, 20],
         'min_samples_split': [2, 5, 10],
         'criterion': ['gini', 'entropy'],
+    },
+    "AdaBoost (適應性提升)": {
+        'n_estimators': [50, 100, 200],
+        'learning_rate': [0.01, 0.1, 1.0],
+    },
+    "Extra Trees (極度隨機樹)": {
+        'n_estimators': [50, 100, 200],
+        'max_depth': [None, 5, 10],
+        'min_samples_split': [2, 5],
+    },
+    "MLP (神經網路)": {
+        'hidden_layer_sizes': [(50,), (100,), (50, 50)],
+        'activation': ['relu', 'tanh'],
+        'alpha': [0.0001, 0.001, 0.01],
+    },
+    "AdaBoost Regressor (適應性提升迴歸)": {
+        'n_estimators': [50, 100, 200],
+        'learning_rate': [0.01, 0.1, 1.0],
+    },
+    "Extra Trees Regressor (極度隨機樹迴歸)": {
+        'n_estimators': [50, 100, 200],
+        'max_depth': [None, 5, 10],
+    },
+    "MLP Regressor (神經網路迴歸)": {
+        'hidden_layer_sizes': [(50,), (100,), (50, 50)],
+        'activation': ['relu', 'tanh'],
+    },
+    "ElasticNet Regression": {
+        'alpha': [0.1, 1.0, 10.0],
+        'l1_ratio': [0.1, 0.5, 0.9],
     },
     "Random Forest (隨機森林)": {
         'n_estimators': [50, 100, 200],

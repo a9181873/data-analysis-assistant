@@ -339,7 +339,7 @@ def _profile_data():
         missing_warning = f"\n⚠️ 發現 **{missing_total}** 個缺失值，建議在 Step 2 中處理。"
 
     summary = (
-        f"✅ **Step 1 完成**：資料已成功載入！\n\n"
+        f"✅ 資料已成功載入！\n\n"
         f"| 項目 | 數值 |\n"
         f"|------|------|\n"
         f"| 資料筆數 | **{n_rows:,}** 筆 |\n"
@@ -349,115 +349,21 @@ def _profile_data():
         f"| 缺失值 | {missing_total} 個 |\n"
         f"{missing_warning}\n"
         f"\n欄位清單：{col_list}\n\n"
-        f"🎯 **建議下一步：Step 2 — 探索性分析 (EDA)**\n"
-        f"點選下方 **🔬 Step 2** 按鈕，查看每個變數的分佈與缺失情況。"
     )
-    _add_msg("assistant", summary)
+    
+    # 呼叫 LLM 獲取動態洞察
+    insight_prompt = (
+        f"資料已經載入，包含 {n_rows} 筆資料，{n_cols} 個欄位。其中有 {missing_total} 個缺失值。"
+        f"請用專業數據顧問的語氣，簡短描述這份資料的基本樣貌，並明確給出若要進行機器學習「建模」前，"
+        f"該如何進行資料調整（例如：針對缺失值該如何補值、數值欄位是否需要標準化、類別欄位編碼等具體建議）。"
+    )
+    
+    with st.spinner("AI 顧問正在速覽資料樣貌..."):
+        llm_insight = _ask_llm(insight_prompt)
+        
+    full_msg = f"{summary}\n---\n**🧠 顧問洞察與建模建議**\n\n{llm_insight}\n\n您可以點擊上方的 **🗺️ ML 分析流程** 或直接在此詢問我下一步！"
+    _add_msg("assistant", full_msg)
     st.session_state.data_profiled = True
-
-
-# ═══════════════════════════════════════════════
-# 側邊欄
-# ═══════════════════════════════════════════════
-st.sidebar.header(config.APP_TITLE)
-
-# -- 檔案上傳 --
-st.sidebar.subheader("📂 檔案上傳")
-uploaded_file = st.sidebar.file_uploader(
-    "選擇數據文件",
-    type=config.SUPPORTED_FILE_TYPES,
-    help="支援 CSV, TXT, Excel, SAS 格式",
-)
-
-if uploaded_file is not None:
-    current_file_info = (uploaded_file.name, uploaded_file.size)
-    if st.session_state.get("last_uploaded_file") != current_file_info:
-        import tempfile
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp:
-                tmp.write(uploaded_file.getbuffer())
-                tmp_path = tmp.name
-            df = load_data(tmp_path)
-            st.session_state.df = df
-            st.session_state.data_profiled = False
-            st.session_state.last_uploaded_file = current_file_info
-            st.sidebar.success(f"成功載入 {uploaded_file.name}")
-        except Exception as e:
-            st.sidebar.error(f"載入失敗: {str(e)}")
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-
-# 資料摘要
-if st.session_state.df is not None:
-    _df = st.session_state.df
-    st.sidebar.caption(f"{len(_df)} 行 x {len(_df.columns)} 列 | 缺失值: {_df.isnull().sum().sum()}")
-
-# 範例數據
-st.sidebar.markdown("---")
-if st.sidebar.button("🚀 使用範例數據", use_container_width=True):
-    sample_data = pd.DataFrame({
-        "年齡": [25, 30, 35, 40, 45, 50, 55, 60],
-        "收入": [50000, 60000, 70000, 80000, 90000, 85000, 75000, 65000],
-        "支出": [30000, 35000, 40000, 45000, 50000, 48000, 42000, 38000],
-        "負債比": [0.2, 0.3, 0.15, 0.4, 0.1, 0.35, 0.25, 0.5],
-        "違約": [0, 0, 0, 1, 0, 1, 0, 1],
-        "城市": ["台北", "台中", "高雄", "台南", "桃園", "台北", "台中", "高雄"],
-    })
-    st.session_state.df = sample_data
-    st.session_state.data_profiled = False
-    st.session_state.last_uploaded_file = "sample_data"
-    st.rerun()
-
-# ── ML 分析流程 (Step-by-Step) ──
-st.sidebar.markdown("---")
-st.sidebar.subheader("🗺️ ML 分析流程")
-
-# 定義流程步驟：(按鈕標籤, module_key, 說明)
-ml_workflow = [
-    ("📋 Step 1：數據預覽",            "data_preview",
-     "了解資料規模、欄位型態與匯出"),
-    ("🔬 Step 2：探索性分析 (EDA)",    "variable_analysis",
-     "敘述統計、分佈圖、缺失值與離群值處理"),
-    ("📊 Step 3：資料圖表化",          "visualization",
-     "互動式圖表，直觀挖掘資料規律"),
-    ("📐 Step 4：統計 & 特徵工程",     "statistics",
-     "假設檢定、相關分析、WOE/IV 特徵篩選"),
-    ("🤖 Step 5：模型訓練與預測",      "ml",
-     "訓練 8+ 機器學習模型，SHAP 解釋"),
-    ("📡 Step 6：模型監控 (PSI)",      "psi_monitoring",
-     "追蹤模型穩定性，偵測資料漂移"),
-]
-
-for label, key, caption in ml_workflow:
-    if st.sidebar.button(label, key=f"workflow_{key}", use_container_width=True):
-        st.session_state.active_module = key
-        module_name = MODULE_MAP[key][0]
-        # 依照步驟產生引導訊息
-        step_num = [k for _, k, _ in ml_workflow].index(key) + 1
-        next_step_label = ml_workflow[step_num][0] if step_num < len(ml_workflow) else None
-        guide_msg = f"已進入 **{module_name}**。\n\n{caption}。"
-        if next_step_label:
-            guide_msg += f"\n\n完成後，建議繼續 **{next_step_label}**。"
-        _add_msg("assistant", guide_msg)
-        st.rerun()
-    st.sidebar.caption(f"  {caption}")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🛠️ 其他工具")
-other_tools = [
-    ("📚 知識庫",  "rag_management"),
-    ("🖥️ AI狀態",  "ai_assistant"),
-]
-sb_c1, sb_c2 = st.sidebar.columns(2)
-for i, (label, key) in enumerate(other_tools):
-    col = sb_c1 if i % 2 == 0 else sb_c2
-    if col.button(label, key=f"other_{key}", use_container_width=True):
-        st.session_state.active_module = key
-        module_name = MODULE_MAP[key][0]
-        _add_msg("assistant", f"已切換至 **{module_name}** 工作區。")
-        st.rerun()
 
 
 # ═══════════════════════════════════════════════
@@ -472,10 +378,84 @@ _profile_data()
 st.title(f"{config.APP_ICON} {config.APP_TITLE}")
 st.markdown("---")
 
-col_chat, col_work = st.columns([1, 1.3])
+# 增強資料視覺化與工作區版面 (比例 1:1.8)
+col_chat, col_work = st.columns([1, 1.8])
 
-# ─── 左側：對話區 ─────────────────────────────
+# ─── 左側：對話區與控制項 ──────────────────────────
 with col_chat:
+    # --- 工作流程與資料上傳 (改放在對話框上方) ---
+    with st.expander("🛠️ 資料載入與功能選擇", expanded=(st.session_state.df is None)):
+        uploaded_file = st.file_uploader(
+            "選擇數據文件",
+            type=config.SUPPORTED_FILE_TYPES,
+            help="支援 CSV, TXT, Excel, SAS 格式",
+        )
+
+        if uploaded_file is not None:
+            current_file_info = (uploaded_file.name, uploaded_file.size)
+            if st.session_state.get("last_uploaded_file") != current_file_info:
+                import tempfile
+                tmp_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp:
+                        tmp.write(uploaded_file.getbuffer())
+                        tmp_path = tmp.name
+                    df = load_data(tmp_path)
+                    st.session_state.df = df
+                    st.session_state.data_profiled = False
+                    st.session_state.last_uploaded_file = current_file_info
+                    st.success(f"成功載入 {uploaded_file.name}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"載入失敗: {str(e)}")
+                finally:
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+
+        if st.session_state.df is not None:
+            _df = st.session_state.df
+            st.caption(f"載入完成: {len(_df)} 行 x {len(_df.columns)} 列 | 缺失值: {_df.isnull().sum().sum()}")
+        else:
+            if st.button("🚀 使用範例數據", use_container_width=True):
+                sample_data = pd.DataFrame({
+                    "年齡": [25, 30, 35, 40, 45, 50, 55, 60],
+                    "收入": [50000, 60000, 70000, 80000, 90000, 85000, 75000, 65000],
+                    "支出": [30000, 35000, 40000, 45000, 50000, 48000, 42000, 38000],
+                    "負債比": [0.2, 0.3, 0.15, 0.4, 0.1, 0.35, 0.25, 0.5],
+                    "違約": [0, 0, 0, 1, 0, 1, 0, 1],
+                    "城市": ["台北", "台中", "高雄", "台南", "桃園", "台北", "台中", "高雄"],
+                })
+                st.session_state.df = sample_data
+                st.session_state.data_profiled = False
+                st.session_state.last_uploaded_file = "sample_data"
+                st.rerun()
+
+        st.markdown("---")
+        st.markdown("**🗺️ ML 分析流程**")
+        ml_workflow = [
+            ("📋 預覽", "data_preview"), ("🔬 EDA", "variable_analysis"),
+            ("📊 圖表", "visualization"), ("📐 統計", "statistics"),
+            ("🤖 建模", "ml"), ("📡 PSI", "psi_monitoring")
+        ]
+        
+        # 使用 3x2 格子排版
+        cols = st.columns(3)
+        for i, (lbl, key) in enumerate(ml_workflow):
+            with cols[i % 3]:
+                if st.button(lbl, key=f"wf_{key}", use_container_width=True):
+                    st.session_state.active_module = key
+                    _add_msg("assistant", f"已進入 **{MODULE_MAP[key][0]}**。")
+                    st.rerun()
+                    
+        other_tools = [("📚 知識庫", "rag_management"), ("🖥️ 系統狀態", "ai_assistant")]
+        cols2 = st.columns(2)
+        for i, (lbl, key) in enumerate(other_tools):
+            with cols2[i]:
+                if st.button(lbl, key=f"ot_{key}", use_container_width=True):
+                    st.session_state.active_module = key
+                    _add_msg("assistant", f"已切換至 **{MODULE_MAP[key][0]}** 工作區。")
+                    st.rerun()
+
     st.subheader("💬 與 AI 架構師對話")
 
     # 對話歷程 (用固定高度容器可捲動)
