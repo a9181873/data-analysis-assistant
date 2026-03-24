@@ -476,16 +476,26 @@ with st.sidebar:
         provider_cfg = config.CLOUD_PROVIDERS[selected_provider]
         st.caption(f"💡 {provider_cfg['note']}")
 
-        # 模型選擇
-        models = provider_cfg["models"]
-        selected_model = st.selectbox(
+        # 模型選擇（顯示推薦度）
+        model_entries = provider_cfg["models"]
+        model_ids = [m["id"] if isinstance(m, dict) else m for m in model_entries]
+        display_labels = [
+            f"{m['rating']} {m['id']}" if isinstance(m, dict) else m
+            for m in model_entries
+        ]
+        cur_idx = (model_ids.index(st.session_state.llm_cloud_model)
+                   if st.session_state.llm_cloud_model in model_ids else 0)
+        selected_idx = display_labels.index(st.selectbox(
             "模型 (Model)",
-            models,
-            index=models.index(st.session_state.llm_cloud_model)
-                  if st.session_state.llm_cloud_model in models else 0,
+            display_labels,
+            index=cur_idx,
             key="cloud_model_select",
-        )
-        st.session_state.llm_cloud_model = selected_model
+        ))
+        st.session_state.llm_cloud_model = model_ids[selected_idx]
+        # 顯示該模型的推薦說明
+        entry = model_entries[selected_idx]
+        if isinstance(entry, dict) and entry.get("note"):
+            st.caption(f"📋 {entry['note']}")
 
         # API Key 輸入（僅存 session state，不寫入任何檔案）
         env_key = provider_cfg["env_key"]

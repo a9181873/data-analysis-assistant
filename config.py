@@ -18,30 +18,45 @@ USE_CLOUD_LLM = os.environ.get("USE_CLOUD_LLM", "False").lower() == "true"
 CLOUD_PROVIDERS = {
     "DeepSeek": {
         "base_url": "https://api.deepseek.com",
-        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "models": [
+            {"id": "deepseek-chat",     "rating": "⭐⭐⭐⭐⭐", "note": "便宜、中文強、數據分析優"},
+            {"id": "deepseek-reasoner", "rating": "⭐⭐⭐⭐⭐", "note": "深度推理、數學邏輯最強"},
+        ],
         "env_key": "DEEPSEEK_API_KEY",
         "note": "價格極低，中文能力強，推理優秀",
     },
     "OpenAI": {
         "base_url": "https://api.openai.com/v1",
-        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+        "models": [
+            {"id": "gpt-4o",      "rating": "⭐⭐⭐⭐",  "note": "全能均衡，生態最成熟"},
+            {"id": "gpt-4o-mini", "rating": "⭐⭐⭐",   "note": "輕量便宜，簡單分析夠用"},
+            {"id": "gpt-4.1",     "rating": "⭐⭐⭐⭐⭐", "note": "最新旗艦，推理與程式碼強"},
+            {"id": "gpt-4.1-mini","rating": "⭐⭐⭐⭐",  "note": "4.1 輕量版，性價比高"},
+            {"id": "o3-mini",     "rating": "⭐⭐⭐⭐",  "note": "推理專用，數學邏輯好"},
+        ],
         "env_key": "OPENAI_API_KEY",
         "note": "生態最成熟，插件豐富",
     },
     "Google Gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "models": ["gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-06-05"],
+        "models": [
+            {"id": "gemini-2.5-flash-preview-05-20", "rating": "⭐⭐⭐⭐⭐", "note": "便宜快速，數據分析性價比最高"},
+            {"id": "gemini-2.5-pro-preview-06-05",   "rating": "⭐⭐⭐⭐⭐", "note": "旗艦級推理，複雜分析首選"},
+        ],
         "env_key": "GEMINI_API_KEY",
         "note": "免費額度高，多模態強",
     },
     "OpenRouter": {
         "base_url": "https://openrouter.ai/api/v1",
         "models": [
-            "anthropic/claude-sonnet-4",
-            "google/gemini-2.5-flash",
-            "openai/gpt-4o",
-            "deepseek/deepseek-chat-v3-0324",
-            "meta-llama/llama-4-maverick",
+            {"id": "google/gemini-2.5-flash",                "rating": "⭐⭐⭐⭐⭐", "note": "性價比最高，數據分析強推"},
+            {"id": "anthropic/claude-sonnet-4",               "rating": "⭐⭐⭐⭐⭐", "note": "推理最強，程式碼與分析頂級"},
+            {"id": "openai/gpt-4o",                          "rating": "⭐⭐⭐⭐",  "note": "全能均衡，穩定可靠"},
+            {"id": "qwen/qwen3-235b-a22b",                   "rating": "⭐⭐⭐⭐",  "note": "Qwen3 旗艦，ML 能力強"},
+            {"id": "google/gemini-2.5-pro",                    "rating": "⭐⭐⭐⭐⭐", "note": "比 flash 更強，複雜分析首選"},
+            {"id": "deepseek/deepseek-r1",                    "rating": "⭐⭐⭐⭐⭐", "note": "深度推理，數學邏輯最強"},
+            {"id": "anthropic/claude-haiku-4",                 "rating": "⭐⭐⭐⭐",  "note": "便宜快速，簡單分析夠用"},
+            {"id": "meta-llama/llama-4-maverick",              "rating": "⭐⭐⭐",   "note": "開源通用，ML 深度分析稍弱"},
         ],
         "env_key": "OPENROUTER_API_KEY",
         "note": "聚合平台，一個 API Key 使用多家模型，可比價",
