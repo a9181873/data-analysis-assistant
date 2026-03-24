@@ -323,7 +323,7 @@ def _ask_llm(question: str) -> str:
             hint = (
                 f"請確認 API Key 正確且與所選提供者匹配。\n\n"
                 f"目前模型: `{config.LLM_MODEL}` | "
-                f"Base URL: `{getattr(config, 'DEEPSEEK_BASE_URL', '')}`"
+                f"Base URL: `{getattr(config, 'CLOUD_BASE_URL', '')}`"
             )
         else:
             hint = (
@@ -571,13 +571,20 @@ if st.session_state.get("_trigger_chat_to_dict"):
         )
         with st.spinner("🤖 AI 正在從對話中擷取變數描述⋯"):
             try:
-                if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
+                if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "CLOUD_API_KEY", ""):
                     from langchain_openai import ChatOpenAI
+                    _extra_headers = {}
+                    if "openrouter.ai" in getattr(config, "CLOUD_BASE_URL", ""):
+                        _extra_headers = {
+                            "HTTP-Referer": "https://github.com/a9181873/data-analysis-assistant",
+                            "X-Title": "Data Analysis Assistant",
+                        }
                     _llm = ChatOpenAI(
                         model=config.LLM_MODEL,
                         api_key=config.CLOUD_API_KEY,
                         base_url=config.CLOUD_BASE_URL,
                         timeout=60,
+                        default_headers=_extra_headers or None,
                     )
                     _resp = _llm.invoke(_extract_prompt).content.strip()
                 else:

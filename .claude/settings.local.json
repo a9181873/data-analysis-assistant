@@ -15,7 +15,8 @@
       "Bash(pip install imbalanced-learn xgboost lightgbm)",
       "Bash(pip install chardet)",
       "Bash(\"c:/Users/JY/Desktop/程式/data_analysis_assistant/data_assistant_env/Scripts/pip.exe\" install chardet)",
-      "Bash(\"data_assistant_env/Scripts/python.exe\" -c \":*)"
+      "Bash(\"data_assistant_env/Scripts/python.exe\" -c \":*)",
+      "Bash(python3 -m py_compile data_analysis.py data_preprocessing.py data_loader.py rag_manager.py psi.py visualization.py woe_iv.py)"
     ]
   }
 }

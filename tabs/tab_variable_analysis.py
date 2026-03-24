@@ -86,11 +86,18 @@ def _ai_generate_description(col_name: str, series: pd.Series) -> str:
     try:
         if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "CLOUD_API_KEY", ""):
             from langchain_openai import ChatOpenAI
+            _extra_headers = {}
+            if "openrouter.ai" in getattr(config, "CLOUD_BASE_URL", ""):
+                _extra_headers = {
+                    "HTTP-Referer": "https://github.com/a9181873/data-analysis-assistant",
+                    "X-Title": "Data Analysis Assistant",
+                }
             llm = ChatOpenAI(
                 model=config.LLM_MODEL,
                 api_key=config.CLOUD_API_KEY,
                 base_url=config.CLOUD_BASE_URL,
                 timeout=30,
+                default_headers=_extra_headers or None,
             )
             return llm.invoke(prompt).content.strip()
         else:
