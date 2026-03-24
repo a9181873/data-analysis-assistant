@@ -518,7 +518,7 @@ with st.sidebar:
 
         # 動態更新 config
         config.USE_CLOUD_LLM = True
-        config.LLM_MODEL = selected_model
+        config.LLM_MODEL = st.session_state.llm_cloud_model
         config.DEEPSEEK_API_KEY = st.session_state.llm_cloud_api_key
         config.DEEPSEEK_BASE_URL = provider_cfg["base_url"]
 
@@ -650,41 +650,7 @@ with col_chat:
                     _add_msg("assistant", f"已切換至 **{MODULE_MAP[key][0]}** 工作區。")
                     st.rerun()
 
-    # 對話標題 + 匯出按鈕
-    _title_col, _export_col = st.columns([3, 1])
-    with _title_col:
-        st.subheader("💬 與 AI 架構師對話")
-    with _export_col:
-        if st.session_state.messages:
-            import re as _re
-            from datetime import datetime as _dt
-            # 產生 Markdown 格式對話紀錄
-            _lines = [f"# AI 架構師對話紀錄\n", f"匯出時間: {_dt.now().strftime('%Y-%m-%d %H:%M:%S')}\n"]
-            if st.session_state.df is not None:
-                _d = st.session_state.df
-                _lines.append(f"資料集: {len(_d)} 行 x {len(_d.columns)} 列\n")
-            _lines.append("---\n")
-            for _m in st.session_state.messages:
-                _role = "🧑 使用者" if _m["role"] == "user" else "🤖 AI 架構師"
-                _content = _re.sub(r'<think>.*?</think>', '', _m["content"], flags=_re.DOTALL).strip()
-                _lines.append(f"### {_role}\n\n{_content}\n\n---\n")
-            _md_text = "\n".join(_lines)
-
-            _exp1, _exp2 = st.columns(2)
-            with _exp1:
-                st.download_button(
-                    "📥 匯出對話",
-                    data=_md_text.encode("utf-8"),
-                    file_name=f"chat_export_{_dt.now().strftime('%Y%m%d_%H%M%S')}.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
-            with _exp2:
-                if st.session_state.df is not None:
-                    if st.button("📖 對話→資料字典", use_container_width=True,
-                                 help="讓 AI 從對話中擷取變數描述，存入資料字典"):
-                        st.session_state["_trigger_chat_to_dict"] = True
-                        st.rerun()
+    st.subheader("💬 與 AI 架構師對話")
 
     # 對話歷程 (用固定高度容器可捲動)
     chat_box = st.container(height=420)
@@ -697,6 +663,37 @@ with col_chat:
                     st.markdown(clean_content)
                 else:
                     st.markdown(msg["content"])
+
+    # 匯出按鈕列（橫向排列於對話框下方）
+    if st.session_state.messages:
+        import re as _re
+        from datetime import datetime as _dt
+        _lines = [f"# AI 架構師對話紀錄\n", f"匯出時間: {_dt.now().strftime('%Y-%m-%d %H:%M:%S')}\n"]
+        if st.session_state.df is not None:
+            _d = st.session_state.df
+            _lines.append(f"資料集: {len(_d)} 行 x {len(_d.columns)} 列\n")
+        _lines.append("---\n")
+        for _m in st.session_state.messages:
+            _role = "🧑 使用者" if _m["role"] == "user" else "🤖 AI 架構師"
+            _content = _re.sub(r'<think>.*?</think>', '', _m["content"], flags=_re.DOTALL).strip()
+            _lines.append(f"### {_role}\n\n{_content}\n\n---\n")
+        _md_text = "\n".join(_lines)
+
+        _exp1, _exp2 = st.columns(2)
+        with _exp1:
+            st.download_button(
+                "📥 匯出對話",
+                data=_md_text.encode("utf-8"),
+                file_name=f"chat_export_{_dt.now().strftime('%Y%m%d_%H%M%S')}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with _exp2:
+            if st.session_state.df is not None:
+                if st.button("📖 對話→資料字典", use_container_width=True,
+                             help="讓 AI 從對話中擷取變數描述，存入資料字典"):
+                    st.session_state["_trigger_chat_to_dict"] = True
+                    st.rerun()
 
     # 快速建議按鈕 (有資料時才顯示)
     if st.session_state.df is not None:
