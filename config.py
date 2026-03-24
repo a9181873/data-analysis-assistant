@@ -34,6 +34,18 @@ CLOUD_PROVIDERS = {
         "env_key": "GEMINI_API_KEY",
         "note": "免費額度高，多模態強",
     },
+    "OpenRouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": [
+            "anthropic/claude-sonnet-4",
+            "google/gemini-2.5-flash",
+            "openai/gpt-4o",
+            "deepseek/deepseek-chat-v3-0324",
+            "meta-llama/llama-4-maverick",
+        ],
+        "env_key": "OPENROUTER_API_KEY",
+        "note": "聚合平台，一個 API Key 使用多家模型，可比價",
+    },
 }
 
 # 向後相容舊環境變數

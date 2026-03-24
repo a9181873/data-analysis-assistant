@@ -68,6 +68,8 @@ def render(df: pd.DataFrame):
         st.markdown("""
         > **📖 學習重點**：敘述統計是 EDA (探索性資料分析) 的第一步。
         > 透過平均數、中位數、標準差、最大值/最小值等，迅速掌握每個變數的「樣貌」。
+        >
+        > 📚 參考：[Tukey, J.W. (1977). *Exploratory Data Analysis*. Addison-Wesley](https://en.wikipedia.org/wiki/Exploratory_data_analysis) / [pandas.DataFrame.describe](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.describe.html)
         """)
 
         col_filter = st.multiselect(
@@ -132,6 +134,8 @@ def render(df: pd.DataFrame):
         st.markdown("""
         > **📖 學習重點**：t 檢定用來比較兩組數值的**平均值是否有顯著差異**。
         > 常用於：驗證「違約 vs. 正常客戶」的年齡是否真的不同。
+        >
+        > 📚 參考：[Student (1908). The probable error of a mean. *Biometrika*, 6(1)](https://doi.org/10.2307/2331554) / [scipy.stats.ttest_ind](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_ind.html)
         """)
         if not numeric_cols:
             st.warning("數據中沒有數值型欄位。")
@@ -158,6 +162,8 @@ def render(df: pd.DataFrame):
         st.markdown("""
         > **📖 學習重點**：線性迴歸探討**連續型目標**（Y）與特徵（X）的線性關係。
         > 在 ML 前作為「基準線模型」非常有用。
+        >
+        > 📚 參考：[Galton, F. (1886). Regression Towards Mediocrity in Hereditary Stature. *J Anthropological Institute*](https://doi.org/10.2307/2841583) / [Scikit-Learn: Linear Models](https://scikit-learn.org/stable/modules/linear_model.html)
         """)
         if not numeric_cols:
             st.warning("數據中沒有數值型欄位。")
@@ -182,6 +188,8 @@ def render(df: pd.DataFrame):
         st.markdown("""
         > **📖 學習重點**：卡方檢定用來測試**兩個類別變數是否獨立**（無關聯）。
         > 例如：城市與違約狀態是否相關？
+        >
+        > 📚 參考：[Pearson, K. (1900). On the criterion that a given system of deviations... *Philosophical Magazine*, 50(302)](https://doi.org/10.1080/14786440009463897) / [scipy.stats.chi2_contingency](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.chi2_contingency.html)
         """)
         if len(categorical_cols) < 2:
             st.warning("卡方檢定需要至少 2 個類別型欄位。請先在 Step 2 變數分析中轉換資料型態。")
@@ -207,6 +215,8 @@ def render(df: pd.DataFrame):
         st.markdown("""
         > **📖 學習重點**：ANOVA 是 t 檢定的延伸，可**同時比較 3 組以上**的平均值差異。
         > 例如：北中南三區客戶的平均收入是否有顯著差異？
+        >
+        > 📚 參考：[Fisher, R.A. (1925). *Statistical Methods for Research Workers*. Oliver & Boyd](https://en.wikipedia.org/wiki/Analysis_of_variance) / [scipy.stats.f_oneway](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html)
         """)
         if not categorical_cols:
             st.warning("需要至少一個類別型欄位作為分組變數。")
@@ -235,6 +245,8 @@ def render(df: pd.DataFrame):
         > **📖 學習重點**：相關係數（-1 ~ 1）衡量兩變數的**線性關係強度與方向**。
         > 接近 ±1 表示強相關；接近 0 表示無線性關係。
         > 常用於**特徵篩選**：過高相關的特徵可能互相重疊（多元共線性）。
+        >
+        > 📚 參考：[Pearson, K. (1895). Correlation Coefficient. *Proc Royal Society*](https://en.wikipedia.org/wiki/Pearson_correlation_coefficient) / [Spearman, C. (1904). *Am J Psychology*, 15(1)](https://doi.org/10.2307/1412159) / [pandas.DataFrame.corr](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.corr.html)
         """)
         if len(numeric_cols) < 2:
             st.warning("需要至少 2 個數值型欄位。")
@@ -274,6 +286,8 @@ def render(df: pd.DataFrame):
         > **📖 學習重點**：WOE (Weight of Evidence) 與 IV (Information Value) 是信用評分建模的核心指標。
         > - **IV < 0.02**：無預測力　**0.02–0.1**：弱　**0.1–0.3**：中　**> 0.3**：強
         > - WOE 可將類別特徵轉換為有序數值，幫助邏輯迴歸更好地建模。
+        >
+        > 📚 參考：[Siddiqi, N. (2006). *Credit Risk Scorecards: Developing and Implementing Intelligent Credit Scoring*. Wiley](https://www.wiley.com/en-us/Credit+Risk+Scorecards-p-9780471754510) / [Good, I.J. (1950). *Probability and the Weighing of Evidence*. Griffin](https://en.wikipedia.org/wiki/Weight_of_evidence)
         """)
         numeric_cols_woe = df.select_dtypes(include=["number"]).columns.tolist()
         all_cols = df.columns.tolist()

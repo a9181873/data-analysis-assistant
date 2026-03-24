@@ -888,6 +888,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "風控建模的標準起點。先用 Logistic Regression 建立 baseline，再嘗試樹模型比較。搭配 WOE 轉換效果更好。",
         "complexity": "極快 — O(n × p)，適合大數據集",
+        "reference": "[Cox, D.R. (1958). The regression analysis of binary sequences. *J Royal Stat Soc B*, 20(2)](https://www.jstor.org/stable/2983890) / [Scikit-Learn: Logistic Regression](https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression)",
     },
     {
         "name": "Decision Tree (決策樹)",
@@ -910,6 +911,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "單棵決策樹通常只用於探索，實戰中建議使用 Random Forest 或 XGBoost 等集成方法。控制 max_depth 是防過擬合的關鍵。",
         "complexity": "快 — O(n × p × log(n))",
+        "reference": "[Breiman et al. (1984). *Classification and Regression Trees*. Wadsworth](https://doi.org/10.1201/9781315139470) / [Scikit-Learn: Decision Trees](https://scikit-learn.org/stable/modules/tree.html)",
     },
     {
         "name": "Random Forest (隨機森林)",
@@ -932,6 +934,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "通常 100~300 棵樹就足夠。n_estimators 增加能穩定效能但不會過擬合。是「什麼都不確定時的安全選擇」。",
         "complexity": "中等 — O(n_trees × n × p × log(n))",
+        "reference": "[Breiman, L. (2001). Random Forests. *Machine Learning*, 45, 5–32](https://doi.org/10.1023/A:1010933404324) / [Scikit-Learn: Random Forest](https://scikit-learn.org/stable/modules/ensemble.html#random-forests)",
     },
     {
         "name": "SVM (支援向量機)",
@@ -955,6 +958,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "記得先做特徵標準化！RBF 核是預設好選擇。C 和 gamma 是最重要的超參數。大數據集建議改用 LinearSVC。",
         "complexity": "慢 — O(n² × p) 到 O(n³)，不適合大數據",
+        "reference": "[Cortes, C. & Vapnik, V. (1995). Support-vector networks. *Machine Learning*, 20, 273–297](https://doi.org/10.1007/BF00994018) / [Scikit-Learn: SVM](https://scikit-learn.org/stable/modules/svm.html)",
     },
     {
         "name": "KNN (K-近鄰)",
@@ -977,6 +981,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "K 取奇數避免平票。必須做特徵標準化。通常只適合特徵 < 20 維的小數據集。",
         "complexity": "訓練瞬間，預測慢 — O(n × p) per query",
+        "reference": "[Fix, E. & Hodges, J.L. (1951). Discriminatory Analysis. *USAF School of Aviation Medicine*](https://apps.dtic.mil/sti/citations/ADA800276) / [Scikit-Learn: Nearest Neighbors](https://scikit-learn.org/stable/modules/neighbors.html)",
     },
     {
         "name": "Naive Bayes (樸素貝葉斯)",
@@ -999,6 +1004,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "在文本分類中效果出乎意料地好。對表格型結構化數據通常不如樹模型。可作為快速 baseline。",
         "complexity": "極快 — O(n × p)",
+        "reference": "[McCallum, A. & Nigam, K. (1998). A comparison of event models for Naive Bayes text classification](https://www.cs.cmu.edu/~knigam/papers/multinomial-aaaiws98.pdf) / [Scikit-Learn: Naive Bayes](https://scikit-learn.org/stable/modules/naive_bayes.html)",
     },
     {
         "name": "LDA (線性判別分析)",
@@ -1022,6 +1028,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "在風控和生物統計中常用。如果 Logistic Regression 效果好，LDA 通常也不錯。可搭配 PCA 先降維。",
         "complexity": "極快 — O(n × p²)",
+        "reference": "[Fisher, R.A. (1936). The use of multiple measurements in taxonomic problems. *Annals of Eugenics*, 7(2)](https://doi.org/10.1111/j.1469-1809.1936.tb02137.x) / [Scikit-Learn: LDA](https://scikit-learn.org/stable/modules/lda_qda.html)",
     },
     {
         "name": "XGBoost",
@@ -1044,6 +1051,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "三個最重要的超參數：learning_rate（通常 0.01~0.1）、max_depth（3~8）、n_estimators（100~1000，配合 early_stopping）。",
         "complexity": "中等 — 支援 GPU 加速，大數據集表現好",
+        "reference": "[Chen, T. & Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. *KDD '16*](https://doi.org/10.1145/2939672.2939785) / [XGBoost 官方文檔](https://xgboost.readthedocs.io/)",
     },
     {
         "name": "LightGBM",
@@ -1065,6 +1073,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "小數據集用 XGBoost 更穩；大數據集 LightGBM 更快。num_leaves 是最重要的參數（預設 31，小數據建議降低）。",
         "complexity": "快 — 比 XGBoost 快 2-10x",
+        "reference": "[Ke, G. et al. (2017). LightGBM: A Highly Efficient Gradient Boosting Decision Tree. *NeurIPS*](https://papers.nips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html) / [LightGBM 官方文檔](https://lightgbm.readthedocs.io/)",
     },
     {
         "name": "CatBoost",
@@ -1087,6 +1096,7 @@ _CLASSIFICATION_ALGO_GUIDE = [
         ],
         "tips": "類別特徵多時，CatBoost 通常比 XGBoost/LightGBM 更好。iterations（樹數量）和 depth（樹深度）是最重要的超參數。",
         "complexity": "中等 — 支援 GPU 加速",
+        "reference": "[Prokhorenkova, L. et al. (2018). CatBoost: unbiased boosting with categorical features. *NeurIPS*](https://arxiv.org/abs/1706.09516) / [CatBoost 官方文檔](https://catboost.ai/docs/)",
     },
 ]
 
@@ -1102,6 +1112,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["非線性關係", "特徵多元共線性嚴重", "存在離群值（對極端值敏感）"],
         "tips": "先檢查殘差是否隨機分佈。若有共線性，改用 Ridge 或 Lasso。",
         "complexity": "極快",
+        "reference": "[Legendre, A.M. (1805). *Nouvelles méthodes pour la détermination des orbites des comètes*](https://en.wikipedia.org/wiki/Least_squares) / [Scikit-Learn: Linear Regression](https://scikit-learn.org/stable/modules/linear_model.html#ordinary-least-squares)",
     },
     {
         "name": "Ridge Regression (嶺迴歸)",
@@ -1112,6 +1123,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["需要自動特徵選擇（Ridge 不會將權重歸零）", "特徵稀疏性很重要"],
         "tips": "alpha 越大正則化越強。交叉驗證選最佳 alpha。",
         "complexity": "極快",
+        "reference": "[Hoerl, A.E. & Kennard, R.W. (1970). Ridge Regression. *Technometrics*, 12(1)](https://doi.org/10.1080/00401706.1970.10488634) / [Scikit-Learn: Ridge](https://scikit-learn.org/stable/modules/linear_model.html#ridge-regression)",
     },
     {
         "name": "Lasso Regression",
@@ -1122,6 +1134,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["高度相關的特徵群組（Lasso 只選其中一個）", "特徵數遠多於樣本數時不穩定"],
         "tips": "想保留所有特徵用 Ridge，想篩選特徵用 Lasso，不確定時用 ElasticNet。",
         "complexity": "極快",
+        "reference": "[Tibshirani, R. (1996). Regression Shrinkage and Selection via the Lasso. *J Royal Stat Soc B*, 58(1)](https://doi.org/10.1111/j.2517-6161.1996.tb02080.x) / [Scikit-Learn: Lasso](https://scikit-learn.org/stable/modules/linear_model.html#lasso)",
     },
     {
         "name": "Decision Tree Regressor (決策樹迴歸)",
@@ -1132,6 +1145,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["容易過擬合", "不穩定（數據微小變化導致完全不同的樹）", "外推能力差"],
         "tips": "單棵決策樹不建議用於最終模型，建議用 Random Forest 或 Gradient Boosting。",
         "complexity": "快",
+        "reference": "[Breiman et al. (1984). *Classification and Regression Trees*. Wadsworth](https://doi.org/10.1201/9781315139470) / [Scikit-Learn: Decision Trees](https://scikit-learn.org/stable/modules/tree.html)",
     },
     {
         "name": "Random Forest Regressor (隨機森林迴歸)",
@@ -1142,6 +1156,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["外推預測（超出訓練範圍的值）", "需要精確的線性關係擬合"],
         "tips": "迴歸任務中 n_estimators=200~500 通常足夠。對外推問題（預測未見過的極端值）表現較差。",
         "complexity": "中等",
+        "reference": "[Breiman, L. (2001). Random Forests. *Machine Learning*, 45, 5–32](https://doi.org/10.1023/A:1010933404324) / [Scikit-Learn: Random Forest](https://scikit-learn.org/stable/modules/ensemble.html#random-forests)",
     },
     {
         "name": "Gradient Boosting Regressor (梯度提升迴歸)",
@@ -1152,6 +1167,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["訓練較慢（序列化訓練）", "需仔細調參防止過擬合"],
         "tips": "learning_rate 降低 + n_estimators 增加通常效果更好，但訓練更慢。",
         "complexity": "中等偏慢",
+        "reference": "[Friedman, J.H. (2001). Greedy Function Approximation: A Gradient Boosting Machine. *Annals of Statistics*, 29(5)](https://doi.org/10.1214/aos/1013203451) / [Scikit-Learn: Gradient Boosting](https://scikit-learn.org/stable/modules/ensemble.html#gradient-tree-boosting)",
     },
     {
         "name": "XGBoost Regressor",
@@ -1162,6 +1178,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["極小數據集", "類別特徵未經適當轉換", "嚴格要求可解釋性的場合"],
         "tips": "注意調整 learning_rate 和 max_depth。處理過擬合可以加入正則化。",
         "complexity": "中等",
+        "reference": "[Chen, T. & Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. *KDD '16*](https://doi.org/10.1145/2939672.2939785) / [XGBoost 官方文檔](https://xgboost.readthedocs.io/)",
     },
     {
         "name": "LightGBM Regressor",
@@ -1172,6 +1189,7 @@ _REGRESSION_ALGO_GUIDE = [
         "not_good_for": ["小數據集容易過擬合", "需仔細調 num_leaves"],
         "tips": "num_leaves 控制模型複雜度，小數據建議 < 31。",
         "complexity": "快",
+        "reference": "[Ke, G. et al. (2017). LightGBM: A Highly Efficient Gradient Boosting Decision Tree. *NeurIPS*](https://papers.nips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html) / [LightGBM 官方文檔](https://lightgbm.readthedocs.io/)",
     },
     {
         "name": "CatBoost Regressor",
