@@ -374,80 +374,7 @@ def _profile_data():
 
 
 # ═══════════════════════════════════════════════
-# 主動數據摘要
-# ═══════════════════════════════════════════════
-_profile_data()
-
-
-# ═══════════════════════════════════════════════
-# 對話 → 資料字典 (由按鈕觸發)
-# ═══════════════════════════════════════════════
-if st.session_state.get("_trigger_chat_to_dict"):
-    st.session_state["_trigger_chat_to_dict"] = False
-    _df = st.session_state.df
-    if _df is not None:
-        import re as _re2
-        import json as _json2
-        # 收集對話中 assistant 的訊息
-        _chat_texts = []
-        for _m in st.session_state.messages:
-            if _m["role"] == "assistant":
-                _clean = _re2.sub(r'<think>.*?</think>', '', _m["content"], flags=_re2.DOTALL).strip()
-                _chat_texts.append(_clean)
-        _all_chat = "\n\n".join(_chat_texts[-6:])  # 取最近 6 則 assistant 訊息
-
-        _col_list = list(_df.columns)
-        _extract_prompt = (
-            f"以下是 AI 架構師與使用者的對話內容，其中可能包含對資料欄位的描述與解釋。\n"
-            f"資料集的欄位名稱為：{_col_list}\n\n"
-            f"--- 對話內容 ---\n{_all_chat}\n--- 結束 ---\n\n"
-            f"請從對話中擷取每個欄位的描述。專業術語請同時提供繁體中文和英文。\n"
-            f"請嚴格以 JSON 格式回覆，格式如下（不要加 markdown code block）：\n"
-            f'{{"欄位名": "描述文字", ...}}\n'
-            f"若對話中未提及某欄位，請跳過該欄位。只回覆 JSON，不要加任何其他文字。"
-        )
-        with st.spinner("🤖 AI 正在從對話中擷取變數描述⋯"):
-            try:
-                if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
-                    from langchain_openai import ChatOpenAI
-                    _llm = ChatOpenAI(
-                        model=config.LLM_MODEL,
-                        api_key=config.DEEPSEEK_API_KEY,
-                        base_url=config.DEEPSEEK_BASE_URL,
-                        timeout=60,
-                    )
-                    _resp = _llm.invoke(_extract_prompt).content.strip()
-                else:
-                    from langchain_ollama import OllamaLLM
-                    _llm = OllamaLLM(
-                        model=config.LLM_MODEL,
-                        base_url=config.OLLAMA_BASE_URL,
-                        timeout=60,
-                    )
-                    _resp = _llm.invoke(_extract_prompt).strip()
-
-                # 清理可能的 markdown code block
-                _resp = _re2.sub(r'^```json\s*', '', _resp)
-                _resp = _re2.sub(r'\s*```$', '', _resp)
-                _parsed = _json2.loads(_resp)
-                if isinstance(_parsed, dict):
-                    _count = 0
-                    for _k, _v in _parsed.items():
-                        if _k in _col_list and isinstance(_v, str) and _v.strip():
-                            st.session_state.column_descriptions[_k] = _v.strip()
-                            _count += 1
-                    _add_msg("assistant",
-                             f"✅ 已從對話中擷取 **{_count}** 個欄位描述存入資料字典！\n\n"
-                             f"前往 **🔬 變數分析與處理** 可查看並匯出。")
-                else:
-                    _add_msg("assistant", "⚠️ AI 回傳格式異常，請重試。")
-            except Exception as _e:
-                _add_msg("assistant", f"⚠️ 擷取失敗: {_e}")
-        st.rerun()
-
-
-# ═══════════════════════════════════════════════
-# 側邊欄：LLM 模型選擇器
+# 側邊欄：LLM 模型選擇器（須在 _profile_data 之前，確保上傳資料時已套用使用者選定的模型）
 # ═══════════════════════════════════════════════
 with st.sidebar:
     st.markdown("### 🧠 LLM 模型設定")
@@ -564,6 +491,79 @@ with st.sidebar:
         st.session_state._llm_sig = _current_llm_sig
 
     st.markdown("---")
+
+
+# ═══════════════════════════════════════════════
+# 主動數據摘要
+# ═══════════════════════════════════════════════
+_profile_data()
+
+
+# ═══════════════════════════════════════════════
+# 對話 → 資料字典 (由按鈕觸發)
+# ═══════════════════════════════════════════════
+if st.session_state.get("_trigger_chat_to_dict"):
+    st.session_state["_trigger_chat_to_dict"] = False
+    _df = st.session_state.df
+    if _df is not None:
+        import re as _re2
+        import json as _json2
+        # 收集對話中 assistant 的訊息
+        _chat_texts = []
+        for _m in st.session_state.messages:
+            if _m["role"] == "assistant":
+                _clean = _re2.sub(r'<think>.*?</think>', '', _m["content"], flags=_re2.DOTALL).strip()
+                _chat_texts.append(_clean)
+        _all_chat = "\n\n".join(_chat_texts[-6:])  # 取最近 6 則 assistant 訊息
+
+        _col_list = list(_df.columns)
+        _extract_prompt = (
+            f"以下是 AI 架構師與使用者的對話內容，其中可能包含對資料欄位的描述與解釋。\n"
+            f"資料集的欄位名稱為：{_col_list}\n\n"
+            f"--- 對話內容 ---\n{_all_chat}\n--- 結束 ---\n\n"
+            f"請從對話中擷取每個欄位的描述。專業術語請同時提供繁體中文和英文。\n"
+            f"請嚴格以 JSON 格式回覆，格式如下（不要加 markdown code block）：\n"
+            f'{{"欄位名": "描述文字", ...}}\n'
+            f"若對話中未提及某欄位，請跳過該欄位。只回覆 JSON，不要加任何其他文字。"
+        )
+        with st.spinner("🤖 AI 正在從對話中擷取變數描述⋯"):
+            try:
+                if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
+                    from langchain_openai import ChatOpenAI
+                    _llm = ChatOpenAI(
+                        model=config.LLM_MODEL,
+                        api_key=config.DEEPSEEK_API_KEY,
+                        base_url=config.DEEPSEEK_BASE_URL,
+                        timeout=60,
+                    )
+                    _resp = _llm.invoke(_extract_prompt).content.strip()
+                else:
+                    from langchain_ollama import OllamaLLM
+                    _llm = OllamaLLM(
+                        model=config.LLM_MODEL,
+                        base_url=config.OLLAMA_BASE_URL,
+                        timeout=60,
+                    )
+                    _resp = _llm.invoke(_extract_prompt).strip()
+
+                # 清理可能的 markdown code block
+                _resp = _re2.sub(r'^```json\s*', '', _resp)
+                _resp = _re2.sub(r'\s*```$', '', _resp)
+                _parsed = _json2.loads(_resp)
+                if isinstance(_parsed, dict):
+                    _count = 0
+                    for _k, _v in _parsed.items():
+                        if _k in _col_list and isinstance(_v, str) and _v.strip():
+                            st.session_state.column_descriptions[_k] = _v.strip()
+                            _count += 1
+                    _add_msg("assistant",
+                             f"✅ 已從對話中擷取 **{_count}** 個欄位描述存入資料字典！\n\n"
+                             f"前往 **🔬 變數分析與處理** 可查看並匯出。")
+                else:
+                    _add_msg("assistant", "⚠️ AI 回傳格式異常，請重試。")
+            except Exception as _e:
+                _add_msg("assistant", f"⚠️ 擷取失敗: {_e}")
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════
