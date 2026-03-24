@@ -451,6 +451,24 @@ with st.sidebar:
             st.session_state.llm_cloud_api_key = api_key_input
             if not api_key_input:
                 st.warning("⚠️ 請輸入 API Key 才能使用雲端模型")
+
+        # 驗證 API Key 按鈕
+        if st.session_state.llm_cloud_api_key:
+            if st.button("🔑 驗證 API Key", key="verify_api_key", use_container_width=True):
+                import requests as _req
+                _test_url = f"{provider_cfg['base_url']}/models"
+                _headers = {"Authorization": f"Bearer {st.session_state.llm_cloud_api_key}"}
+                try:
+                    _r = _req.get(_test_url, headers=_headers, timeout=10)
+                    if _r.status_code == 200:
+                        st.success("✅ API Key 驗證成功！")
+                    elif _r.status_code == 401:
+                        st.error("❌ API Key 無效或已過期，請重新檢查")
+                    else:
+                        st.warning(f"⚠️ 回應狀態碼 {_r.status_code}，Key 可能有效但無法確認")
+                except Exception as _e:
+                    st.error(f"❌ 連線失敗: {_e}")
+
         st.caption("🔒 API Key 僅存於記憶體，關閉頁面即消失，不會寫入任何檔案。")
 
         # 動態更新 config
