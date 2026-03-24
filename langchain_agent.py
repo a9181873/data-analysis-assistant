@@ -221,11 +221,18 @@ def create_agent_executor(df: pd.DataFrame = None):
 
     if getattr(config, "USE_CLOUD_LLM", False):
         from langchain_openai import ChatOpenAI
+        _extra_headers = {}
+        if "openrouter.ai" in config.CLOUD_BASE_URL:
+            _extra_headers = {
+                "HTTP-Referer": "https://github.com/a9181873/data-analysis-assistant",
+                "X-Title": "Data Analysis Assistant",
+            }
         llm = ChatOpenAI(
             model=config.LLM_MODEL,
-            api_key=config.DEEPSEEK_API_KEY,   # 動態由 sidebar 設定
-            base_url=config.DEEPSEEK_BASE_URL,  # 動態由 sidebar 設定
+            api_key=config.CLOUD_API_KEY,
+            base_url=config.CLOUD_BASE_URL,
             timeout=config.OLLAMA_TIMEOUT,
+            default_headers=_extra_headers or None,
         )
         return create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
     else:

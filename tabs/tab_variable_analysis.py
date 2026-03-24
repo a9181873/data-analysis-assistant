@@ -84,12 +84,12 @@ def _ai_generate_description(col_name: str, series: pd.Series) -> str:
         f"只回答描述本身，不要加前綴或編號。"
     )
     try:
-        if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
+        if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "CLOUD_API_KEY", ""):
             from langchain_openai import ChatOpenAI
             llm = ChatOpenAI(
                 model=config.LLM_MODEL,
-                api_key=config.DEEPSEEK_API_KEY,
-                base_url=config.DEEPSEEK_BASE_URL,
+                api_key=config.CLOUD_API_KEY,
+                base_url=config.CLOUD_BASE_URL,
                 timeout=30,
             )
             return llm.invoke(prompt).content.strip()

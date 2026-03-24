@@ -452,20 +452,35 @@ with st.sidebar:
             if not api_key_input:
                 st.warning("⚠️ 請輸入 API Key 才能使用雲端模型")
 
-        # 驗證 API Key 按鈕
+        # 驗證 API Key 按鈕（發送真實請求測試認證）
         if st.session_state.llm_cloud_api_key:
             if st.button("🔑 驗證 API Key", key="verify_api_key", use_container_width=True):
                 import requests as _req
-                _test_url = f"{provider_cfg['base_url']}/models"
-                _headers = {"Authorization": f"Bearer {st.session_state.llm_cloud_api_key}"}
+                _test_url = f"{provider_cfg['base_url']}/chat/completions"
+                _headers = {
+                    "Authorization": f"Bearer {st.session_state.llm_cloud_api_key}",
+                    "Content-Type": "application/json",
+                }
+                _payload = {
+                    "model": st.session_state.llm_cloud_model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 1,
+                }
                 try:
-                    _r = _req.get(_test_url, headers=_headers, timeout=10)
+                    _r = _req.post(_test_url, headers=_headers, json=_payload, timeout=15)
                     if _r.status_code == 200:
                         st.success("✅ API Key 驗證成功！")
                     elif _r.status_code == 401:
                         st.error("❌ API Key 無效或已過期，請重新檢查")
+                    elif _r.status_code == 402:
+                        st.error("❌ 餘額不足，請至提供者網站儲值")
                     else:
-                        st.warning(f"⚠️ 回應狀態碼 {_r.status_code}，Key 可能有效但無法確認")
+                        _detail = ""
+                        try:
+                            _detail = _r.json().get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        st.warning(f"⚠️ 狀態碼 {_r.status_code}: {_detail}")
                 except Exception as _e:
                     st.error(f"❌ 連線失敗: {_e}")
 
@@ -474,8 +489,8 @@ with st.sidebar:
         # 動態更新 config
         config.USE_CLOUD_LLM = True
         config.LLM_MODEL = st.session_state.llm_cloud_model
-        config.DEEPSEEK_API_KEY = st.session_state.llm_cloud_api_key
-        config.DEEPSEEK_BASE_URL = provider_cfg["base_url"]
+        config.CLOUD_API_KEY = st.session_state.llm_cloud_api_key
+        config.CLOUD_BASE_URL = provider_cfg["base_url"]
 
     else:
         st.session_state.llm_source = "local"
@@ -560,8 +575,8 @@ if st.session_state.get("_trigger_chat_to_dict"):
                     from langchain_openai import ChatOpenAI
                     _llm = ChatOpenAI(
                         model=config.LLM_MODEL,
-                        api_key=config.DEEPSEEK_API_KEY,
-                        base_url=config.DEEPSEEK_BASE_URL,
+                        api_key=config.CLOUD_API_KEY,
+                        base_url=config.CLOUD_BASE_URL,
                         timeout=60,
                     )
                     _resp = _llm.invoke(_extract_prompt).content.strip()

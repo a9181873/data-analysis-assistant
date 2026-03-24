@@ -16,15 +16,6 @@ USE_CLOUD_LLM = os.environ.get("USE_CLOUD_LLM", "False").lower() == "true"
 
 # 雲端提供者配置 (名稱, 預設 base_url, 推薦模型, 環境變數 key 名稱)
 CLOUD_PROVIDERS = {
-    "DeepSeek": {
-        "base_url": "https://api.deepseek.com",
-        "models": [
-            {"id": "deepseek-chat",     "rating": "⭐⭐⭐⭐⭐", "note": "便宜、中文強、數據分析優"},
-            {"id": "deepseek-reasoner", "rating": "⭐⭐⭐⭐⭐", "note": "深度推理、數學邏輯最強"},
-        ],
-        "env_key": "DEEPSEEK_API_KEY",
-        "note": "價格極低，中文能力強，推理優秀",
-    },
     "OpenAI": {
         "base_url": "https://api.openai.com/v1",
         "models": [
@@ -42,6 +33,7 @@ CLOUD_PROVIDERS = {
         "models": [
             {"id": "gemini-2.5-flash-preview-05-20", "rating": "⭐⭐⭐⭐⭐", "note": "便宜快速，數據分析性價比最高"},
             {"id": "gemini-2.5-pro-preview-06-05",   "rating": "⭐⭐⭐⭐⭐", "note": "旗艦級推理，複雜分析首選"},
+            {"id": "gemini-2.0-flash",               "rating": "⭐⭐⭐⭐",  "note": "穩定版 Flash，速度快"},
         ],
         "env_key": "GEMINI_API_KEY",
         "note": "免費額度高，多模態強",
@@ -49,23 +41,21 @@ CLOUD_PROVIDERS = {
     "OpenRouter": {
         "base_url": "https://openrouter.ai/api/v1",
         "models": [
-            {"id": "google/gemini-2.5-flash",                "rating": "⭐⭐⭐⭐⭐", "note": "性價比最高，數據分析強推"},
-            {"id": "anthropic/claude-sonnet-4",               "rating": "⭐⭐⭐⭐⭐", "note": "推理最強，程式碼與分析頂級"},
-            {"id": "openai/gpt-4o",                          "rating": "⭐⭐⭐⭐",  "note": "全能均衡，穩定可靠"},
-            {"id": "qwen/qwen3-235b-a22b",                   "rating": "⭐⭐⭐⭐",  "note": "Qwen3 旗艦，ML 能力強"},
-            {"id": "google/gemini-2.5-pro",                    "rating": "⭐⭐⭐⭐⭐", "note": "比 flash 更強，複雜分析首選"},
-            {"id": "deepseek/deepseek-r1",                    "rating": "⭐⭐⭐⭐⭐", "note": "深度推理，數學邏輯最強"},
-            {"id": "anthropic/claude-haiku-4",                 "rating": "⭐⭐⭐⭐",  "note": "便宜快速，簡單分析夠用"},
-            {"id": "meta-llama/llama-4-maverick",              "rating": "⭐⭐⭐",   "note": "開源通用，ML 深度分析稍弱"},
+            {"id": "anthropic/claude-sonnet-4",      "rating": "⭐⭐⭐⭐⭐", "note": "推理最強，程式碼與分析頂級"},
+            {"id": "openai/gpt-4o",                  "rating": "⭐⭐⭐⭐",  "note": "全能均衡，穩定可靠"},
+            {"id": "deepseek/deepseek-r1",           "rating": "⭐⭐⭐⭐⭐", "note": "深度推理，數學邏輯最強"},
+            {"id": "qwen/qwen3-235b-a22b",           "rating": "⭐⭐⭐⭐",  "note": "Qwen3 旗艦，ML 能力強"},
+            {"id": "anthropic/claude-haiku-4",        "rating": "⭐⭐⭐⭐",  "note": "便宜快速，簡單分析夠用"},
+            {"id": "meta-llama/llama-4-maverick",     "rating": "⭐⭐⭐",   "note": "開源通用，ML 深度分析稍弱"},
         ],
         "env_key": "OPENROUTER_API_KEY",
         "note": "聚合平台，一個 API Key 使用多家模型，可比價",
     },
 }
 
-# 向後相容舊環境變數
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+# 雲端 LLM 連線（由 sidebar 動態設定，不要手動修改）
+CLOUD_API_KEY = ""
+CLOUD_BASE_URL = ""
 
 # Embedding 模型 (用於 RAG 文檔檢索，sentence-transformers 格式)
 #   - BAAI/bge-m3              ~1.2GB，多語言 (中/英/日/韓)，中文表現最佳 (推薦)
