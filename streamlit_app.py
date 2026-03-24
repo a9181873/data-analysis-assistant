@@ -107,6 +107,13 @@ _defaults = {
     "active_module": None,
     "data_profiled": False,
     "last_uploaded_file": None,
+    "_trigger_chat_to_dict": False,
+    # LLM 選擇器
+    "llm_source": "local",         # "local" or "cloud"
+    "llm_cloud_provider": None,
+    "llm_cloud_model": None,
+    "llm_cloud_api_key": "",       # 僅存 session，不落地
+    "llm_local_model": None,
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -373,6 +380,183 @@ _profile_data()
 
 
 # ═══════════════════════════════════════════════
+# 對話 → 資料字典 (由按鈕觸發)
+# ═══════════════════════════════════════════════
+if st.session_state.get("_trigger_chat_to_dict"):
+    st.session_state["_trigger_chat_to_dict"] = False
+    _df = st.session_state.df
+    if _df is not None:
+        import re as _re2
+        import json as _json2
+        # 收集對話中 assistant 的訊息
+        _chat_texts = []
+        for _m in st.session_state.messages:
+            if _m["role"] == "assistant":
+                _clean = _re2.sub(r'<think>.*?</think>', '', _m["content"], flags=_re2.DOTALL).strip()
+                _chat_texts.append(_clean)
+        _all_chat = "\n\n".join(_chat_texts[-6:])  # 取最近 6 則 assistant 訊息
+
+        _col_list = list(_df.columns)
+        _extract_prompt = (
+            f"以下是 AI 架構師與使用者的對話內容，其中可能包含對資料欄位的描述與解釋。\n"
+            f"資料集的欄位名稱為：{_col_list}\n\n"
+            f"--- 對話內容 ---\n{_all_chat}\n--- 結束 ---\n\n"
+            f"請從對話中擷取每個欄位的描述。專業術語請同時提供繁體中文和英文。\n"
+            f"請嚴格以 JSON 格式回覆，格式如下（不要加 markdown code block）：\n"
+            f'{{"欄位名": "描述文字", ...}}\n'
+            f"若對話中未提及某欄位，請跳過該欄位。只回覆 JSON，不要加任何其他文字。"
+        )
+        with st.spinner("🤖 AI 正在從對話中擷取變數描述⋯"):
+            try:
+                if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
+                    from langchain_openai import ChatOpenAI
+                    _llm = ChatOpenAI(
+                        model=config.LLM_MODEL,
+                        api_key=config.DEEPSEEK_API_KEY,
+                        base_url=config.DEEPSEEK_BASE_URL,
+                        timeout=60,
+                    )
+                    _resp = _llm.invoke(_extract_prompt).content.strip()
+                else:
+                    from langchain_ollama import OllamaLLM
+                    _llm = OllamaLLM(
+                        model=config.LLM_MODEL,
+                        base_url=config.OLLAMA_BASE_URL,
+                        timeout=60,
+                    )
+                    _resp = _llm.invoke(_extract_prompt).strip()
+
+                # 清理可能的 markdown code block
+                _resp = _re2.sub(r'^```json\s*', '', _resp)
+                _resp = _re2.sub(r'\s*```$', '', _resp)
+                _parsed = _json2.loads(_resp)
+                if isinstance(_parsed, dict):
+                    _count = 0
+                    for _k, _v in _parsed.items():
+                        if _k in _col_list and isinstance(_v, str) and _v.strip():
+                            st.session_state.column_descriptions[_k] = _v.strip()
+                            _count += 1
+                    _add_msg("assistant",
+                             f"✅ 已從對話中擷取 **{_count}** 個欄位描述存入資料字典！\n\n"
+                             f"前往 **🔬 變數分析與處理** 可查看並匯出。")
+                else:
+                    _add_msg("assistant", "⚠️ AI 回傳格式異常，請重試。")
+            except Exception as _e:
+                _add_msg("assistant", f"⚠️ 擷取失敗: {_e}")
+        st.rerun()
+
+
+# ═══════════════════════════════════════════════
+# 側邊欄：LLM 模型選擇器
+# ═══════════════════════════════════════════════
+with st.sidebar:
+    st.markdown("### 🧠 LLM 模型設定")
+
+    llm_source = st.radio(
+        "運算模式",
+        ["🖥️ 地端 (Local)", "☁️ 雲端 (Cloud)"],
+        index=0 if st.session_state.llm_source == "local" else 1,
+        key="llm_source_radio",
+        horizontal=True,
+    )
+    _is_cloud = "雲端" in llm_source
+
+    if _is_cloud:
+        st.session_state.llm_source = "cloud"
+
+        provider_names = list(config.CLOUD_PROVIDERS.keys())
+        selected_provider = st.selectbox(
+            "雲端提供者 (Cloud Provider)",
+            provider_names,
+            index=provider_names.index(st.session_state.llm_cloud_provider)
+                  if st.session_state.llm_cloud_provider in provider_names else 0,
+            key="cloud_provider_select",
+        )
+        st.session_state.llm_cloud_provider = selected_provider
+        provider_cfg = config.CLOUD_PROVIDERS[selected_provider]
+        st.caption(f"💡 {provider_cfg['note']}")
+
+        # 模型選擇
+        models = provider_cfg["models"]
+        selected_model = st.selectbox(
+            "模型 (Model)",
+            models,
+            index=models.index(st.session_state.llm_cloud_model)
+                  if st.session_state.llm_cloud_model in models else 0,
+            key="cloud_model_select",
+        )
+        st.session_state.llm_cloud_model = selected_model
+
+        # API Key 輸入（僅存 session state，不寫入任何檔案）
+        env_key = provider_cfg["env_key"]
+        existing_key = os.environ.get(env_key, "")
+        if existing_key:
+            st.success(f"✅ 已偵測到環境變數 `{env_key}`")
+            st.session_state.llm_cloud_api_key = existing_key
+        else:
+            api_key_input = st.text_input(
+                f"🔑 API Key",
+                type="password",
+                value=st.session_state.llm_cloud_api_key,
+                placeholder=f"請輸入 {selected_provider} API Key",
+                key="api_key_input",
+            )
+            st.session_state.llm_cloud_api_key = api_key_input
+            if not api_key_input:
+                st.warning("⚠️ 請輸入 API Key 才能使用雲端模型")
+        st.caption("🔒 API Key 僅存於記憶體，關閉頁面即消失，不會寫入任何檔案。")
+
+        # 動態更新 config
+        config.USE_CLOUD_LLM = True
+        config.LLM_MODEL = selected_model
+        config.DEEPSEEK_API_KEY = st.session_state.llm_cloud_api_key
+        config.DEEPSEEK_BASE_URL = provider_cfg["base_url"]
+
+    else:
+        st.session_state.llm_source = "local"
+        config.USE_CLOUD_LLM = False
+
+        # 偵測本地 Ollama 可用模型
+        _ollama_models = []
+        try:
+            import requests
+            resp = requests.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                _ollama_models = [m["name"] for m in resp.json().get("models", [])]
+        except Exception:
+            pass
+
+        if _ollama_models:
+            # 嘗試找到目前 config 中的模型位置
+            default_idx = 0
+            current = st.session_state.llm_local_model or config.LLM_MODEL
+            if current in _ollama_models:
+                default_idx = _ollama_models.index(current)
+
+            selected_local = st.selectbox(
+                "本地模型 (Local Model)",
+                _ollama_models,
+                index=default_idx,
+                key="local_model_select",
+            )
+            st.session_state.llm_local_model = selected_local
+            config.LLM_MODEL = selected_local
+            st.success(f"✅ Ollama 已連線，{len(_ollama_models)} 個模型可用")
+        else:
+            st.error("❌ 無法連線 Ollama，請確認服務已啟動")
+            st.code("ollama serve", language="bash")
+            st.caption(f"目前預設模型: {config.LLM_MODEL}")
+
+    # 當模型來源變更時，重置 agent
+    _current_llm_sig = f"{st.session_state.llm_source}:{config.LLM_MODEL}"
+    if st.session_state.get("_llm_sig") != _current_llm_sig:
+        st.session_state.agent_executor = None
+        st.session_state._llm_sig = _current_llm_sig
+
+    st.markdown("---")
+
+
+# ═══════════════════════════════════════════════
 # 主內容區：左側對話 ｜ 右側動態工作區
 # ═══════════════════════════════════════════════
 st.title(f"{config.APP_ICON} {config.APP_TITLE}")
@@ -456,7 +640,41 @@ with col_chat:
                     _add_msg("assistant", f"已切換至 **{MODULE_MAP[key][0]}** 工作區。")
                     st.rerun()
 
-    st.subheader("💬 與 AI 架構師對話")
+    # 對話標題 + 匯出按鈕
+    _title_col, _export_col = st.columns([3, 1])
+    with _title_col:
+        st.subheader("💬 與 AI 架構師對話")
+    with _export_col:
+        if st.session_state.messages:
+            import re as _re
+            from datetime import datetime as _dt
+            # 產生 Markdown 格式對話紀錄
+            _lines = [f"# AI 架構師對話紀錄\n", f"匯出時間: {_dt.now().strftime('%Y-%m-%d %H:%M:%S')}\n"]
+            if st.session_state.df is not None:
+                _d = st.session_state.df
+                _lines.append(f"資料集: {len(_d)} 行 x {len(_d.columns)} 列\n")
+            _lines.append("---\n")
+            for _m in st.session_state.messages:
+                _role = "🧑 使用者" if _m["role"] == "user" else "🤖 AI 架構師"
+                _content = _re.sub(r'<think>.*?</think>', '', _m["content"], flags=_re.DOTALL).strip()
+                _lines.append(f"### {_role}\n\n{_content}\n\n---\n")
+            _md_text = "\n".join(_lines)
+
+            _exp1, _exp2 = st.columns(2)
+            with _exp1:
+                st.download_button(
+                    "📥 匯出對話",
+                    data=_md_text.encode("utf-8"),
+                    file_name=f"chat_export_{_dt.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            with _exp2:
+                if st.session_state.df is not None:
+                    if st.button("📖 對話→資料字典", use_container_width=True,
+                                 help="讓 AI 從對話中擷取變數描述，存入資料字典"):
+                        st.session_state["_trigger_chat_to_dict"] = True
+                        st.rerun()
 
     # 對話歷程 (用固定高度容器可捲動)
     chat_box = st.container(height=420)

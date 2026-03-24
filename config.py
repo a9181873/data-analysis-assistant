@@ -10,9 +10,33 @@ import os
 #   - qwen2.5:7b       輕量版模型，速度最快
 LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-r1:7b")
 
-# --- 雲端 API 部署配置 (Strategy C) ---
-# 若上百人使用，建議改接 DeepSeek 官方 API (非常便宜)
+# --- 雲端 API 部署配置 ---
+# 支援多家雲端 LLM 提供者，API Key 透過 UI 輸入（存於 session state，不落地）
 USE_CLOUD_LLM = os.environ.get("USE_CLOUD_LLM", "False").lower() == "true"
+
+# 雲端提供者配置 (名稱, 預設 base_url, 推薦模型, 環境變數 key 名稱)
+CLOUD_PROVIDERS = {
+    "DeepSeek": {
+        "base_url": "https://api.deepseek.com",
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "env_key": "DEEPSEEK_API_KEY",
+        "note": "價格極低，中文能力強，推理優秀",
+    },
+    "OpenAI": {
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+        "env_key": "OPENAI_API_KEY",
+        "note": "生態最成熟，插件豐富",
+    },
+    "Google Gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": ["gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-06-05"],
+        "env_key": "GEMINI_API_KEY",
+        "note": "免費額度高，多模態強",
+    },
+}
+
+# 向後相容舊環境變數
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 

@@ -21,8 +21,11 @@ def render(df: pd.DataFrame):
         st.write(f"- 記憶體使用: {df.memory_usage(deep=True).sum() / 1024:.2f} KB")
 
         st.write("**列名與類型:**")
+        descs = st.session_state.get("column_descriptions", {})
         for col in df.columns:
-            st.write(f"- `{col}` ({df[col].dtype})")
+            desc = descs.get(col, "")
+            desc_text = f" — {desc}" if desc else ""
+            st.write(f"- `{col}` ({df[col].dtype}){desc_text}")
 
         # 缺失值摘要
         missing = df.isnull().sum()

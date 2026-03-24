@@ -223,8 +223,9 @@ def create_agent_executor(df: pd.DataFrame = None):
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(
             model=config.LLM_MODEL,
-            api_key=config.DEEPSEEK_API_KEY,
-            base_url=config.DEEPSEEK_BASE_URL,
+            api_key=config.DEEPSEEK_API_KEY,   # 動態由 sidebar 設定
+            base_url=config.DEEPSEEK_BASE_URL,  # 動態由 sidebar 設定
+            timeout=config.OLLAMA_TIMEOUT,
         )
         return create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
     else:

@@ -31,3 +31,8 @@ chroma_db/
 
 # Gemini
 .gemini/
+
+# Secrets / API keys
+.env
+.env.*
+secrets.toml

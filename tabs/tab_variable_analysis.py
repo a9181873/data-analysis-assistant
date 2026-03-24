@@ -69,26 +69,38 @@ def _detect_outliers(series: pd.Series) -> dict | None:
 
 
 def _ai_generate_description(col_name: str, series: pd.Series) -> str:
-    """透過 Ollama LLM (LangChain) 自動產生欄位業務說明。"""
+    """透過 LLM 自動產生欄位業務說明（繁體中文 + 英文術語）。支援雲端與地端。"""
     sample_values = series.dropna().head(5).tolist()
     dtype_str = str(series.dtype)
     unique_count = series.nunique()
     prompt = (
-        f"你是一位資料分析師。以下是資料集中的一個欄位資訊：\n"
+        f"你是一位資深資料分析師。以下是資料集中的一個欄位資訊：\n"
         f"- 欄位名稱：{col_name}\n"
         f"- 資料型態：{dtype_str}\n"
         f"- 唯一值數量：{unique_count}\n"
         f"- 前 5 筆樣本值：{sample_values}\n\n"
-        f"請用一句簡潔的中文描述這個欄位可能代表什麼業務含義。只回答描述本身，不要加前綴。"
+        f"請用繁體中文描述這個欄位的業務含義，專業術語請附上英文。\n"
+        f"格式範例：「客戶的年收入 (Annual Income)，為連續型數值變數 (Continuous Variable)，常用於信用評分模型 (Credit Scoring Model)。」\n"
+        f"只回答描述本身，不要加前綴或編號。"
     )
     try:
-        from langchain_ollama import OllamaLLM
-        llm = OllamaLLM(
-            model=config.LLM_MODEL,
-            base_url=config.OLLAMA_BASE_URL,
-            timeout=30,
-        )
-        return llm.invoke(prompt).strip()
+        if getattr(config, "USE_CLOUD_LLM", False) and getattr(config, "DEEPSEEK_API_KEY", ""):
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(
+                model=config.LLM_MODEL,
+                api_key=config.DEEPSEEK_API_KEY,
+                base_url=config.DEEPSEEK_BASE_URL,
+                timeout=30,
+            )
+            return llm.invoke(prompt).content.strip()
+        else:
+            from langchain_ollama import OllamaLLM
+            llm = OllamaLLM(
+                model=config.LLM_MODEL,
+                base_url=config.OLLAMA_BASE_URL,
+                timeout=30,
+            )
+            return llm.invoke(prompt).strip()
     except Exception as e:
         return f"(AI 生成失敗: {e})"
 
@@ -135,11 +147,12 @@ def render(df: pd.DataFrame):
 
     st.markdown("---")
 
-    # ═══ 全部欄位總覽表格 ═══
+    # ═══ 全部欄位總覽表格（含 AI 描述）═══
     overview_data = []
     for col in df.columns:
         is_num = pd.api.types.is_numeric_dtype(df[col])
         missing = int(df[col].isnull().sum())
+        desc = st.session_state.column_descriptions.get(col, "")
         overview_data.append({
             "欄位": col,
             "型態": str(df[col].dtype),
@@ -147,8 +160,22 @@ def render(df: pd.DataFrame):
             "缺失率": f"{missing / len(df) * 100:.1f}%",
             "唯一值": int(df[col].nunique()),
             "類型": "數值" if is_num else "類別",
+            "說明": desc,
         })
     st.dataframe(pd.DataFrame(overview_data), use_container_width=True, hide_index=True)
+
+    # 一鍵 AI 生成全部描述
+    btn_col1, btn_col2 = st.columns([1, 3])
+    with btn_col1:
+        if st.button("🤖 AI 一鍵生成全部欄位描述", use_container_width=True):
+            progress = st.progress(0)
+            cols_list = list(df.columns)
+            for i, col in enumerate(cols_list):
+                if col not in st.session_state.column_descriptions:
+                    st.session_state.column_descriptions[col] = _ai_generate_description(col, df[col])
+                progress.progress((i + 1) / len(cols_list))
+            st.success("✅ 全部欄位描述已生成！")
+            st.rerun()
 
     st.markdown("---")
 
@@ -191,21 +218,91 @@ def render(df: pd.DataFrame):
 
             with chart_col:
                 st.markdown("**📈 分佈圖**")
+                # 根據資料特性推薦最佳圖表類型
                 if is_numeric:
-                    clean = series.dropna()
-                    if len(clean) > 0:
-                        try:
-                            hist_values, bin_edges = np.histogram(clean, bins=min(30, max(5, len(clean) // 10)))
+                    unique_ratio = series.nunique() / max(series.count(), 1)
+                    if unique_ratio < 0.05 or series.nunique() <= 10:
+                        default_chart = "長條圖 (Bar Chart)"
+                    elif series.nunique() > 30:
+                        default_chart = "直方圖 (Histogram)"
+                    else:
+                        default_chart = "箱型圖 (Box Plot)"
+                    chart_options = [
+                        "直方圖 (Histogram)",
+                        "箱型圖 (Box Plot)",
+                        "長條圖 (Bar Chart)",
+                        "小提琴圖 (Violin Plot)",
+                        "密度圖 (KDE Plot)",
+                    ]
+                else:
+                    n_unique = series.nunique()
+                    if n_unique <= 6:
+                        default_chart = "圓餅圖 (Pie Chart)"
+                    else:
+                        default_chart = "長條圖 (Bar Chart)"
+                    chart_options = [
+                        "長條圖 (Bar Chart)",
+                        "圓餅圖 (Pie Chart)",
+                    ]
+
+                selected_chart = st.selectbox(
+                    "圖表類型",
+                    chart_options,
+                    index=chart_options.index(default_chart) if default_chart in chart_options else 0,
+                    key=f"chart_type_{col_name}",
+                )
+
+                try:
+                    import plotly.express as px
+
+                    if selected_chart.startswith("直方圖"):
+                        fig = px.histogram(df, x=col_name, nbins=min(30, max(5, series.count() // 10)),
+                                           title=None)
+                        fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif selected_chart.startswith("箱型圖"):
+                        fig = px.box(df, y=col_name, title=None)
+                        fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif selected_chart.startswith("小提琴"):
+                        fig = px.violin(df, y=col_name, box=True, title=None)
+                        fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif selected_chart.startswith("密度圖"):
+                        clean = series.dropna()
+                        if len(clean) > 1:
+                            fig = px.histogram(df, x=col_name, histnorm='density',
+                                               marginal='rug', title=None)
+                            fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.caption("資料不足，無法繪製密度圖")
+
+                    elif selected_chart.startswith("圓餅圖"):
+                        vc = series.value_counts().head(10)
+                        fig = px.pie(names=vc.index.astype(str), values=vc.values, title=None)
+                        fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif selected_chart.startswith("長條圖"):
+                        if is_numeric:
+                            hist_values, bin_edges = np.histogram(
+                                series.dropna(), bins=min(30, max(5, series.count() // 10)))
                             bin_labels = [f"{bin_edges[i]:.1f}" for i in range(len(hist_values))]
                             chart_df = pd.DataFrame({"區間": bin_labels, "頻率": hist_values})
                             st.bar_chart(chart_df.set_index("區間"))
-                        except Exception:
-                            st.caption("無法繪製直方圖")
-                else:
-                    vc = series.value_counts().head(15)
-                    if len(vc) > 0:
-                        chart_df = pd.DataFrame({"類別": vc.index.astype(str), "數量": vc.values})
-                        st.bar_chart(chart_df.set_index("類別"))
+                        else:
+                            vc = series.value_counts().head(15)
+                            fig = px.bar(x=vc.index.astype(str), y=vc.values,
+                                         labels={"x": col_name, "y": "數量"}, title=None)
+                            fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=30))
+                            st.plotly_chart(fig, use_container_width=True)
+
+                except Exception as e:
+                    st.caption(f"無法繪製圖表: {e}")
 
             st.markdown("---")
 
