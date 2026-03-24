@@ -454,18 +454,18 @@ with st.sidebar:
                 }
                 try:
                     _r = _req.post(_test_url, headers=_headers, json=_payload, timeout=15)
+                    _detail = ""
+                    try:
+                        _detail = _r.json().get("error", {}).get("message", "")
+                    except Exception:
+                        _detail = _r.text[:200] if _r.text else ""
                     if _r.status_code == 200:
                         st.success("✅ API Key 驗證成功！")
                     elif _r.status_code == 401:
-                        st.error("❌ API Key 無效或已過期，請重新檢查")
+                        st.error(f"❌ 驗證失敗 (401): {_detail or 'API Key 無效或已過期'}")
                     elif _r.status_code == 402:
-                        st.error("❌ 餘額不足，請至提供者網站儲值")
+                        st.error(f"❌ 餘額不足 (402): {_detail or '請至提供者網站儲值'}")
                     else:
-                        _detail = ""
-                        try:
-                            _detail = _r.json().get("error", {}).get("message", "")
-                        except Exception:
-                            pass
                         st.warning(f"⚠️ 狀態碼 {_r.status_code}: {_detail}")
                 except Exception as _e:
                     st.error(f"❌ 連線失敗: {_e}")
