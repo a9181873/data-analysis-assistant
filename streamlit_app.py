@@ -319,9 +319,19 @@ def _ask_llm(question: str) -> str:
         return re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
 
     except Exception as e:
+        if getattr(config, "USE_CLOUD_LLM", False):
+            hint = (
+                f"請確認 API Key 正確且與所選提供者匹配。\n\n"
+                f"目前模型: `{config.LLM_MODEL}` | "
+                f"Base URL: `{getattr(config, 'DEEPSEEK_BASE_URL', '')}`"
+            )
+        else:
+            hint = (
+                f"請確認 Ollama 服務正在運行且模型 `{config.LLM_MODEL}` 已安裝。"
+            )
         return (
             f"⚠️ AI 回應失敗: {e}\n\n"
-            f"請確認 Ollama 服務正在運行且模型 `{config.LLM_MODEL}` 已安裝。\n\n"
+            f"{hint}\n\n"
             f"您也可以使用下方的快捷按鈕直接操作工具模組。"
         )
 
