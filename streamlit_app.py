@@ -110,9 +110,8 @@ _defaults = {
     "_trigger_chat_to_dict": False,
     # LLM 選擇器
     "llm_source": "local",         # "local" or "cloud"
-    "llm_cloud_provider": None,
-    "llm_cloud_model": None,
-    "llm_cloud_api_key": "",       # 僅存 session，不落地
+    "llm_cloud_model_idx": 0,      # CLOUD_MODELS 的索引
+    "llm_cloud_api_keys": {},      # {env_key: key_value} 各提供者分開存
     "llm_local_model": None,
 }
 for key, default in _defaults.items():
@@ -401,68 +400,55 @@ with st.sidebar:
     if _is_cloud:
         st.session_state.llm_source = "cloud"
 
-        provider_names = list(config.CLOUD_PROVIDERS.keys())
-        selected_provider = st.selectbox(
-            "雲端提供者 (Cloud Provider)",
-            provider_names,
-            index=provider_names.index(st.session_state.llm_cloud_provider)
-                  if st.session_state.llm_cloud_provider in provider_names else 0,
-            key="cloud_provider_select",
-        )
-        st.session_state.llm_cloud_provider = selected_provider
-        provider_cfg = config.CLOUD_PROVIDERS[selected_provider]
-        st.caption(f"💡 {provider_cfg['note']}")
+        # 扁平模型列表：一個下拉選單直接選模型
+        _models = config.CLOUD_MODELS
+        _display = [f"{m['rating']} {m['id']}  ({m['provider']})" for m in _models]
+        _cur_idx = st.session_state.llm_cloud_model_idx
+        if _cur_idx >= len(_models):
+            _cur_idx = 0
 
-        # 模型選擇（顯示推薦度）
-        model_entries = provider_cfg["models"]
-        model_ids = [m["id"] if isinstance(m, dict) else m for m in model_entries]
-        display_labels = [
-            f"{m['rating']} {m['id']}" if isinstance(m, dict) else m
-            for m in model_entries
-        ]
-        cur_idx = (model_ids.index(st.session_state.llm_cloud_model)
-                   if st.session_state.llm_cloud_model in model_ids else 0)
-        selected_idx = display_labels.index(st.selectbox(
-            "模型 (Model)",
-            display_labels,
-            index=cur_idx,
-            key="cloud_model_select",
-        ))
-        st.session_state.llm_cloud_model = model_ids[selected_idx]
-        # 顯示該模型的推薦說明
-        entry = model_entries[selected_idx]
-        if isinstance(entry, dict) and entry.get("note"):
-            st.caption(f"📋 {entry['note']}")
+        _sel_label = st.selectbox("模型 (Model)", _display, index=_cur_idx, key="cloud_model_select")
+        _sel_idx = _display.index(_sel_label)
+        st.session_state.llm_cloud_model_idx = _sel_idx
+        _sel_model = _models[_sel_idx]
 
-        # API Key 輸入（僅存 session state，不寫入任何檔案）
-        env_key = provider_cfg["env_key"]
-        existing_key = os.environ.get(env_key, "")
-        if existing_key:
-            st.success(f"✅ 已偵測到環境變數 `{env_key}`")
-            st.session_state.llm_cloud_api_key = existing_key
+        st.caption(f"📋 {_sel_model['note']}")
+
+        # API Key 輸入（根據選定模型的 env_key 自動切換）
+        _env_key = _sel_model["env_key"]
+        _existing_key = os.environ.get(_env_key, "")
+        if _existing_key:
+            st.success(f"✅ 已偵測到環境變數 `{_env_key}`")
+            st.session_state.llm_cloud_api_keys[_env_key] = _existing_key
         else:
-            api_key_input = st.text_input(
-                f"🔑 API Key",
+            _saved_key = st.session_state.llm_cloud_api_keys.get(_env_key, "")
+            _key_input = st.text_input(
+                f"🔑 {_sel_model['provider']} API Key",
                 type="password",
-                value=st.session_state.llm_cloud_api_key,
-                placeholder=f"請輸入 {selected_provider} API Key",
+                value=_saved_key,
+                placeholder=f"請輸入 {_env_key}",
                 key="api_key_input",
             )
-            st.session_state.llm_cloud_api_key = api_key_input
-            if not api_key_input:
-                st.warning("⚠️ 請輸入 API Key 才能使用雲端模型")
+            st.session_state.llm_cloud_api_keys[_env_key] = _key_input
+            if not _key_input:
+                st.warning(f"⚠️ 請輸入 {_sel_model['provider']} API Key")
 
-        # 驗證 API Key 按鈕（發送真實請求測試認證）
-        if st.session_state.llm_cloud_api_key:
+        _active_key = st.session_state.llm_cloud_api_keys.get(_env_key, "")
+
+        # 驗證 API Key（真實發送請求）
+        if _active_key:
             if st.button("🔑 驗證 API Key", key="verify_api_key", use_container_width=True):
                 import requests as _req
-                _test_url = f"{provider_cfg['base_url']}/chat/completions"
+                _test_url = f"{_sel_model['base_url']}/chat/completions"
                 _headers = {
-                    "Authorization": f"Bearer {st.session_state.llm_cloud_api_key}",
+                    "Authorization": f"Bearer {_active_key}",
                     "Content-Type": "application/json",
                 }
+                if "openrouter.ai" in _sel_model["base_url"]:
+                    _headers["HTTP-Referer"] = "https://github.com/a9181873/data-analysis-assistant"
+                    _headers["X-Title"] = "Data Analysis Assistant"
                 _payload = {
-                    "model": st.session_state.llm_cloud_model,
+                    "model": _sel_model["id"],
                     "messages": [{"role": "user", "content": "Hi"}],
                     "max_tokens": 1,
                 }
@@ -488,9 +474,9 @@ with st.sidebar:
 
         # 動態更新 config
         config.USE_CLOUD_LLM = True
-        config.LLM_MODEL = st.session_state.llm_cloud_model
-        config.CLOUD_API_KEY = st.session_state.llm_cloud_api_key
-        config.CLOUD_BASE_URL = provider_cfg["base_url"]
+        config.LLM_MODEL = _sel_model["id"]
+        config.CLOUD_API_KEY = _active_key
+        config.CLOUD_BASE_URL = _sel_model["base_url"]
 
     else:
         st.session_state.llm_source = "local"
@@ -507,7 +493,6 @@ with st.sidebar:
             pass
 
         if _ollama_models:
-            # 嘗試找到目前 config 中的模型位置
             default_idx = 0
             current = st.session_state.llm_local_model or config.LLM_MODEL
             if current in _ollama_models:
