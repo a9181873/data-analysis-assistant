@@ -14,7 +14,7 @@
 | 機器學習 | 分類/迴歸建模（LR/RF/XGBoost/LightGBM/CatBoost/LDA）、Optuna 調參、SHAP 可解釋性、模型匯出 |
 | PSI 監控 | 族群穩定性指數（PSI）計算與視覺化 |
 | RAG 管理 | 上傳文件建立知識庫，供 AI 助手查詢 |
-| AI 助手 | LangChain ReAct Agent，支援 Ollama 本地模型或 OpenRouter 雲端 LLM |
+| AI 助手 | LangChain Agent，具備 **AI Copilot** 模式：自動建議模組、預填參數、一鍵執行與結果回饋 |
 
 ## 💻 系統需求
 
@@ -61,12 +61,17 @@ docker-compose up --build
 
 ---
 
-## 🤖 AI 助手：本地 vs 雲端 LLM
+## 🤖 AI 助手：人機協作 (Human-AI Collaboration)
 
-應用程式支援兩種模式，可在 AI 助手分頁中切換：
+本專案升級為 **AI Copilot** 架構，具備以下先進功能：
 
-- **本地模式（Ollama）**: 完全離線，保護數據隱私，需先安裝 Ollama 並下載模型
-- **雲端模式（OpenRouter）**: 透過 OpenRouter API 使用 GPT-4o、Claude、Gemini 等模型，需要 API 金鑰
+- **結構化分析建議**：LLM 不僅提供文字建議，還會回饋 JSON 格式的動作參數。
+- **行動按鈕 (Actionable Buttons)**：對話中會出現建議的操作按鈕，點擊後自動跳轉至對應模組。
+- **參數預填 (Param Pre-fill)**：AI 會根據數據內容與您的意圖，預先填入工具面板中的參數（如目標變數、模型名稱、圖表類型等）。
+- **自動執行與回饋**：部分動作支援一鍵執行並將執行結果（如模型準確度、統計摘要）自動發回聊天框，讓 AI 做進一步回饋與建議。
+- **雙模式切換**：
+    - **本地模式 (Ollama)**：完全離線，保護數據隱私（推薦使用 Qwen2.5 或 Llama 3.1 8B 以上模型）。
+    - **雲端模式 (OpenRouter)**：透過 API 使用 GPT-4o、Claude 3.5 Sonnet 等雲端最強模型。
 
 ## 📦 主要依賴
 

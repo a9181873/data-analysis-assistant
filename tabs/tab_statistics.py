@@ -49,13 +49,27 @@ def render(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
 
+    # ── AI 推薦面板 ──
+    _ai_ctx = st.session_state.get("ai_context_msg", "")
+    _ai_params = st.session_state.get("ai_suggested_params", {})
+    if _ai_ctx and st.session_state.get("active_module") == "statistics":
+        st.info(f"🤖 **AI 建議：** {_ai_ctx[:200]}...")
+
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
     categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
 
+    # 根據 AI 建議預選分析類型
+    _analysis_options = ["敘述統計", "t 檢定", "線性迴歸", "卡方檢定", "ANOVA 變異數分析",
+                         "相關分析", "WOE/IV 分析"]
+    _default_idx = 0
+    _suggested_type = _ai_params.get("analysis_type", "")
+    if _suggested_type in _analysis_options:
+        _default_idx = _analysis_options.index(_suggested_type)
+
     analysis_type = st.selectbox(
         "📋 選擇分析類型",
-        ["敘述統計", "t 檢定", "線性迴歸", "卡方檢定", "ANOVA 變異數分析",
-         "相關分析", "WOE/IV 分析"],
+        _analysis_options,
+        index=_default_idx,
         help="由左至右依序對應 ML 工作流中的探索 → 特徵篩選步驟。"
     )
 

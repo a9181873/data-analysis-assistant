@@ -119,6 +119,11 @@ def _ai_generate_description(col_name: str, series: pd.Series) -> str:
 def render(df: pd.DataFrame):
     st.subheader("變數分析與處理")
 
+    # ── AI 推薦面板 ──
+    _ai_ctx = st.session_state.get("ai_context_msg", "")
+    if _ai_ctx and st.session_state.get("active_module") == "variable_analysis":
+        st.info(f"🤖 **AI 建議：** {_ai_ctx[:200]}...")
+
     # --- 初始化 session state ---
     if "column_descriptions" not in st.session_state:
         st.session_state.column_descriptions = {}

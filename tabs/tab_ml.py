@@ -37,13 +37,28 @@ except ImportError:
 def render(df: pd.DataFrame):
     st.subheader("機器學習")
 
+    # ── AI 推薦面板 ──
+    _ai_ctx = st.session_state.get("ai_context_msg", "")
+    _ai_params = st.session_state.get("ai_suggested_params", {})
+    if _ai_ctx and st.session_state.get("active_module") == "ml":
+        st.info(f"🤖 **AI 建議：** {_ai_ctx[:250]}...")
+
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
     all_cols = df.columns.tolist()
 
-    # 任務類型選擇
+    # 任務類型選擇（根據 AI 建議預選）
+    _task_options = ["分類 (Classification)", "迴歸 (Regression)", "分群 (Clustering)"]
+    _task_default_idx = 0
+    _suggested_task = _ai_params.get("task_type", "")
+    if _suggested_task == "regression":
+        _task_default_idx = 1
+    elif _suggested_task == "clustering":
+        _task_default_idx = 2
+
     task_type_label = st.radio(
         "選擇任務類型",
-        ["分類 (Classification)", "迴歸 (Regression)", "分群 (Clustering)"],
+        _task_options,
+        index=_task_default_idx,
         horizontal=True,
         key="ml_task_type"
     )
@@ -73,15 +88,24 @@ def render(df: pd.DataFrame):
             target_col = None
             available_features = all_cols
         else:
+            # 根據 AI 建議預選目標欄位
+            _suggested_target = _ai_params.get("target_col", "")
+            _target_idx = 0
+            if _suggested_target in all_cols:
+                _target_idx = all_cols.index(_suggested_target)
             target_col = st.selectbox(
                 "目標變數 (Y)", all_cols,
+                index=_target_idx,
                 help="分類：選擇類別欄位；迴歸：選擇數值欄位"
             )
             available_features = [c for c in all_cols if c != target_col]
             
     with c2:
+        # 根據 AI 建議預選特徵欄位
+        _suggested_features = _ai_params.get("feature_cols", [])
+        _default_features = [f for f in _suggested_features if f in available_features] if _suggested_features else available_features
         feature_cols = st.multiselect("特徵變數 (X)", available_features,
-                                      default=available_features)
+                                      default=_default_features)
 
     # 不平衡數據處理（只在分類任務顯示）
     if not is_regression and not is_clustering:

@@ -113,6 +113,12 @@ _defaults = {
     "llm_cloud_model_idx": 0,      # CLOUD_MODELS 的索引
     "llm_cloud_api_keys": {},      # {env_key: key_value} 各提供者分開存
     "llm_local_model": None,
+    # ── 人機協作 (Human-AI Collaboration) ──
+    "ai_suggested_params": {},      # LLM 建議的工具參數
+    "ai_actions": [],               # LLM 建議的可執行動作按鈕
+    "ai_context_msg": "",           # LLM 建議理由（供右側面板顯示）
+    "tool_result_summary": None,    # 工具執行結果摘要（供回饋給 LLM）
+    "_pending_action": None,        # 待執行的 action（點按鈕後觸發）
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -255,9 +261,12 @@ def _build_data_context() -> str:
     return context
 
 
-def _ask_llm(question: str) -> str:
-    """呼叫 LangGraph Agent 產生顧問式 AI 回應（含對話歷史 + 數據上下文）。"""
-    import re
+def _ask_llm_structured(question: str) -> dict:
+    """呼叫 LLM 產生結構化 JSON 回應（含 reply, target_module, suggested_params, actions）。
+    回傳 dict，即使 LLM 回傳非法 JSON 也會 fallback 為純文字。"""
+    import re, json
+    _FALLBACK = {"reply": "", "target_module": None, "suggested_params": {}, "actions": []}
+
     try:
         # 確保 agent 已建立
         df = st.session_state.df
@@ -269,13 +278,11 @@ def _ask_llm(question: str) -> str:
             st.session_state._agent_df_id = df_id
 
         # ── 建構對話歷史 (最近 10 輪) ──
-        # 過濾掉系統自動產生的訊息（資料摘要、模組切換引導等），避免 LLM 模仿
-        _SYSTEM_MSG_MARKERS = ["Step 1 完成", "已進入 **", "已切換至 **"]
+        _SYSTEM_MSG_MARKERS = ["Step 1 完成", "已進入 **", "已切換至 **", "⚙️ 自動執行"]
         history_messages = []
-        recent = st.session_state.messages[-10:]  # 最多取最近 10 則 (5 輪)
+        recent = st.session_state.messages[-10:]
         for msg in recent:
             content = msg["content"]
-            # 跳過系統自動產生的 assistant 訊息
             if msg["role"] == "assistant" and any(m in content for m in _SYSTEM_MSG_MARKERS):
                 continue
             if msg["role"] == "user":
@@ -296,9 +303,7 @@ def _ask_llm(question: str) -> str:
             if collection.count() > 0:
                 context = query_rag(question, collection, n_results=3)
                 if context != "找不到相關文檔。":
-                    augmented = (
-                        f"以下是知識庫中的參考資料:\n{context}\n\n{augmented}"
-                    )
+                    augmented = f"以下是知識庫中的參考資料:\n{context}\n\n{augmented}"
         except Exception:
             pass
 
@@ -307,32 +312,245 @@ def _ask_llm(question: str) -> str:
         all_messages = history_messages + [("user", augmented)]
         result = agent.invoke({"messages": all_messages})
 
-        # 取出最後一則 AI 回覆
         messages = result.get("messages", [])
-        if messages:
-            raw = messages[-1].content
-        else:
-            raw = str(result)
+        raw = messages[-1].content if messages else str(result)
 
         # 清除 <think> 標籤
-        return re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+        raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+
+        # ── 嘗試解析 JSON ──
+        # 移除可能的 markdown code block 包裹
+        cleaned = re.sub(r'^```(?:json)?\s*', '', raw)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+        # 嘗試找到 JSON 物件
+        json_match = re.search(r'\{[\s\S]*\}', cleaned)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            if isinstance(parsed, dict) and "reply" in parsed:
+                # 確保所有 key 都存在
+                parsed.setdefault("target_module", None)
+                parsed.setdefault("suggested_params", {})
+                parsed.setdefault("actions", [])
+                return parsed
+
+        # JSON 解析失敗 → fallback：用原有的 keyword routing
+        module_key, _ = route_intent(question)
+        return {"reply": raw, "target_module": module_key, "suggested_params": {}, "actions": []}
 
     except Exception as e:
         if getattr(config, "USE_CLOUD_LLM", False):
-            hint = (
-                f"請確認 API Key 正確且與所選提供者匹配。\n\n"
-                f"目前模型: `{config.LLM_MODEL}` | "
-                f"Base URL: `{getattr(config, 'CLOUD_BASE_URL', '')}`"
-            )
+            hint = (f"請確認 API Key 正確且與所選提供者匹配。\n\n"
+                    f"目前模型: `{config.LLM_MODEL}` | "
+                    f"Base URL: `{getattr(config, 'CLOUD_BASE_URL', '')}`")
         else:
-            hint = (
-                f"請確認 Ollama 服務正在運行且模型 `{config.LLM_MODEL}` 已安裝。"
-            )
-        return (
-            f"⚠️ AI 回應失敗: {e}\n\n"
-            f"{hint}\n\n"
-            f"您也可以使用下方的快捷按鈕直接操作工具模組。"
-        )
+            hint = f"請確認 Ollama 服務正在運行且模型 `{config.LLM_MODEL}` 已安裝。"
+        fallback = _FALLBACK.copy()
+        fallback["reply"] = f"⚠️ AI 回應失敗: {e}\n\n{hint}\n\n您也可以使用下方的快捷按鈕直接操作工具模組。"
+        return fallback
+
+
+def _execute_action(action: dict):
+    """自動執行 LLM 建議的 action — 呼叫程式內建工具並將結果回饋到聊天。"""
+    module = action.get("module", "")
+    params = action.get("params", {})
+    label = action.get("label", "執行動作")
+    df = st.session_state.df
+    if df is None:
+        _add_msg("assistant", "⚠️ 尚未載入資料，無法執行此動作。")
+        return
+
+    result_text = ""
+    try:
+        if module == "statistics":
+            analysis_type = params.get("analysis_type", "敘述統計")
+            target_columns = params.get("target_columns", [])
+            selected_df = df[target_columns] if target_columns else df
+
+            if analysis_type == "敘述統計":
+                from data_analysis import descriptive_statistics
+                result = descriptive_statistics(selected_df)
+                # 也產生格式化摘要
+                num_desc = selected_df.describe(include="number")
+                cols_str = ", ".join(target_columns) if target_columns else "全部欄位"
+                result_text = f"**📐 敘述統計 — {cols_str}**\n\n"
+                if not num_desc.empty:
+                    result_text += num_desc.T.to_markdown() + "\n\n"
+                missing = selected_df.isnull().sum()
+                if missing.sum() > 0:
+                    result_text += f"⚠️ 缺失值: {missing[missing > 0].to_dict()}\n"
+                else:
+                    result_text += "✅ 無缺失值\n"
+                st.session_state.analysis_results.append(("敘述統計", result))
+
+            elif analysis_type == "相關分析":
+                from data_analysis import perform_correlation_analysis
+                method = params.get("method", "pearson")
+                cols = target_columns or df.select_dtypes(include=["number"]).columns.tolist()
+                if len(cols) >= 2:
+                    result = perform_correlation_analysis(df, cols, method)
+                    result_text = f"**📐 相關分析 ({method})**\n\n{result}\n"
+                else:
+                    result_text = "⚠️ 需要至少 2 個數值欄位進行相關分析。\n"
+
+            elif analysis_type in ("t 檢定", "ANOVA 變異數分析", "卡方檢定", "線性迴歸", "WOE/IV 分析"):
+                # 這些需要更多參數，導向工具面板讓使用者微調
+                st.session_state.active_module = "statistics"
+                st.session_state.ai_suggested_params = params
+                result_text = f"已開啟 **統計分析** 面板並預設為「{analysis_type}」，請在右側確認參數後執行。"
+
+            else:
+                st.session_state.active_module = "statistics"
+                st.session_state.ai_suggested_params = params
+                result_text = f"已開啟 **統計分析** 面板，分析類型：{analysis_type}"
+
+        elif module == "ml":
+            model_name = params.get("model_name", "Random Forest")
+            target_col = params.get("target_col")
+            task_type = params.get("task_type", "classification")
+            feature_cols = params.get("feature_cols", [])
+
+            if not target_col:
+                # 猜測目標欄位（取唯一值最少的數值欄位）
+                for c in df.columns:
+                    if df[c].nunique() <= 5 and pd.api.types.is_numeric_dtype(df[c]):
+                        target_col = c
+                        break
+            if not target_col:
+                target_col = df.columns[-1]
+
+            if not feature_cols:
+                feature_cols = [c for c in df.columns if c != target_col]
+
+            # 自動訓練模型
+            from ml_models import prepare_data, train_single_model, train_regression_model, apply_balancing
+            try:
+                _task = config.ML_TASK_REGRESSION if task_type == "regression" else config.ML_TASK_CLASSIFICATION
+                X_train, X_test, y_train, y_test, le, preprocessor = prepare_data(
+                    df, target_col, feature_cols, config.DEFAULT_TEST_SIZE, _task)
+
+                if task_type == "regression":
+                    res = train_regression_model(model_name, X_train, y_train, X_test, y_test)
+                    result_text = (
+                        f"**🤖 {model_name} 迴歸模型訓練完成！**\n\n"
+                        f"| 指標 | 數值 |\n|------|------|\n"
+                        f"| R² | {res['r2']:.4f} |\n"
+                        f"| RMSE | {res['rmse']:.4f} |\n"
+                        f"| MAE | {res['mae']:.4f} |\n"
+                    )
+                else:
+                    X_train_bal, y_train_bal = apply_balancing(X_train, y_train, "none")
+                    res = train_single_model(model_name, X_train_bal, y_train_bal, X_test, y_test, le)
+                    result_text = (
+                        f"**🤖 {model_name} 分類模型訓練完成！**\n\n"
+                        f"| 指標 | 數值 |\n|------|------|\n"
+                        f"| Accuracy | {res['accuracy']:.4f} |\n"
+                        f"| Precision | {res['precision']:.4f} |\n"
+                        f"| Recall | {res['recall']:.4f} |\n"
+                        f"| F1 Score | {res['f1']:.4f} |\n"
+                    )
+                    if res.get('roc_auc') is not None:
+                        result_text += f"| AUC | {res['roc_auc']:.4f} |\n"
+
+                # 存入 ML 結果供面板展示
+                feature_names_out = X_train.columns.tolist() if isinstance(X_train, pd.DataFrame) else feature_cols
+                st.session_state.ml_results_single = {
+                    "type": task_type, "res": res, "model_name": model_name,
+                    "feature_names_out": feature_names_out, "le": le,
+                    "X_train_bal": X_train_bal if task_type != "regression" else X_train,
+                    "X_test_df": X_test, "y_test": y_test,
+                    "preprocessor": preprocessor,
+                }
+                st.session_state.active_module = "ml"
+                st.session_state.ai_suggested_params = params
+                result_text += "\n📊 詳細結果已在右側 **機器學習** 面板中展示。"
+
+            except Exception as train_err:
+                result_text = f"⚠️ 模型訓練失敗: {train_err}\n\n已開啟 ML 面板，請手動調整參數後重試。"
+                st.session_state.active_module = "ml"
+                st.session_state.ai_suggested_params = params
+
+        elif module == "visualization":
+            chart_type = params.get("chart_type", "散點圖")
+            x_col = params.get("x_col")
+            y_col = params.get("y_col")
+
+            # 自動產生圖表
+            from visualization import (plot_histogram, plot_scatter, plot_boxplot,
+                                       plot_bar_chart, plot_pie_chart, plot_correlation_heatmap)
+            fig = None
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+
+            if chart_type == "散點圖" and x_col and y_col:
+                fig = plot_scatter(df, x_col, y_col)
+                result_text = f"**📊 散點圖 — {x_col} vs {y_col}**"
+            elif chart_type == "直方圖" and x_col:
+                fig = plot_histogram(df, x_col, 30)
+                result_text = f"**📊 直方圖 — {x_col}**"
+            elif chart_type == "箱型圖" and (x_col or y_col):
+                col = y_col or x_col
+                fig = plot_boxplot(df, col)
+                result_text = f"**📊 箱型圖 — {col}**"
+            elif chart_type == "相關熱圖":
+                cols = [x_col, y_col] if x_col and y_col else numeric_cols[:6]
+                cols = [c for c in cols if c in numeric_cols]
+                if len(cols) >= 2:
+                    fig = plot_correlation_heatmap(df, cols)
+                    result_text = f"**📊 相關熱圖 — {', '.join(cols)}**"
+            else:
+                # 導向面板
+                st.session_state.active_module = "visualization"
+                st.session_state.ai_suggested_params = params
+                result_text = f"已開啟 **資料圖表化** 面板，建議圖表類型：{chart_type}"
+
+            if fig is not None:
+                st.session_state["_auto_fig"] = fig
+                st.session_state.active_module = "visualization"
+                st.session_state.ai_suggested_params = params
+
+        elif module == "variable_analysis":
+            st.session_state.active_module = "variable_analysis"
+            st.session_state.ai_suggested_params = params
+            result_text = "已開啟 **變數分析與處理** 面板。"
+
+        elif module == "data_preview":
+            st.session_state.active_module = "data_preview"
+            result_text = "已開啟 **數據預覽** 面板。"
+
+        elif module == "psi_monitoring":
+            st.session_state.active_module = "psi_monitoring"
+            result_text = "已開啟 **模型監控 (PSI)** 面板。"
+
+        else:
+            result_text = f"未知的模組: {module}"
+
+    except Exception as e:
+        result_text = f"⚠️ 自動執行失敗: {e}"
+
+    # 將執行結果寫入聊天
+    if result_text:
+        _add_msg("assistant", f"⚙️ 自動執行 **{label}** 完成：\n\n{result_text}")
+        # 存入 tool_result_summary 供後續 LLM 回饋
+        st.session_state.tool_result_summary = result_text
+
+
+def _feedback_from_tool_result():
+    """如果有工具執行結果摘要，呼叫 LLM 做進一步評論與建議。"""
+    summary = st.session_state.get("tool_result_summary")
+    if not summary:
+        return
+    st.session_state.tool_result_summary = None  # 清除，避免重複觸發
+
+    feedback_prompt = (
+        f"以下是剛才自動執行工具的結果：\n{summary}\n\n"
+        f"請根據結果簡短評論（2-3 句），並建議使用者下一步可以做什麼。"
+        f"reply 中直接給出評論和建議即可，actions 可以給 1-2 個下一步建議。"
+    )
+    with st.spinner("🤖 AI 正在分析結果..."):
+        result = _ask_llm_structured(feedback_prompt)
+    _add_msg("assistant", result["reply"])
+    st.session_state.ai_actions = result.get("actions", [])
+    if result.get("target_module"):
+        st.session_state.ai_suggested_params = result.get("suggested_params", {})
 
 
 def _profile_data():
@@ -375,10 +593,12 @@ def _profile_data():
     )
     
     with st.spinner("AI 顧問正在速覽資料樣貌..."):
-        llm_insight = _ask_llm(insight_prompt)
+        llm_result = _ask_llm_structured(insight_prompt)
+        llm_insight = llm_result["reply"]
         
     full_msg = f"{summary}\n---\n**🧠 顧問洞察與建模建議**\n\n{llm_insight}\n\n您可以點擊上方的 **🗺️ ML 分析流程** 或直接在此詢問我下一步！"
     _add_msg("assistant", full_msg)
+    st.session_state.ai_actions = llm_result.get("actions", [])
     st.session_state.data_profiled = True
 
 
@@ -525,6 +745,17 @@ with st.sidebar:
 # 主動數據摘要
 # ═══════════════════════════════════════════════
 _profile_data()
+
+# ═══════════════════════════════════════════════
+# 待執行 Action 處理 (按鈕觸發後在此 rerun 時執行)
+# ═══════════════════════════════════════════════
+if st.session_state.get("_pending_action"):
+    _act = st.session_state._pending_action
+    st.session_state._pending_action = None
+    _execute_action(_act)
+    # 執行完後呼叫 LLM 回饋
+    _feedback_from_tool_result()
+    st.rerun()
 
 
 # ═══════════════════════════════════════════════
@@ -699,6 +930,19 @@ with col_chat:
                 else:
                     st.markdown(msg["content"])
 
+    # ── AI 建議的行動按鈕（顯示在對話框下方）──
+    _ai_actions = st.session_state.get("ai_actions", [])
+    if _ai_actions and st.session_state.df is not None:
+        st.caption("🤖 AI 建議的操作（點擊將自動執行）：")
+        _act_cols = st.columns(min(len(_ai_actions), 3))
+        for _i, _act in enumerate(_ai_actions):
+            with _act_cols[_i % 3]:
+                if st.button(_act.get("label", "執行"), key=f"ai_act_{_i}",
+                             use_container_width=True, type="primary"):
+                    st.session_state._pending_action = _act
+                    st.session_state.ai_actions = []  # 清除按鈕
+                    st.rerun()
+
     # 匯出按鈕列（橫向排列於對話框下方）
     if st.session_state.messages:
         import re as _re
@@ -744,14 +988,14 @@ with col_chat:
             col = sg1 if i % 2 == 0 else sg2
             if col.button(btn_label, key=f"suggest_{i}", use_container_width=True):
                 _add_msg("user", btn_text)
-                # 靜默導流到對應模組
-                module_key, _ = route_intent(btn_text)
-                if module_key:
-                    st.session_state.active_module = module_key
-                # 呼叫 LLM 產生顧問式回應
                 with st.spinner("AI 顧問分析中..."):
-                    llm_reply = _ask_llm(btn_text)
-                _add_msg("assistant", llm_reply)
+                    result = _ask_llm_structured(btn_text)
+                _add_msg("assistant", result["reply"])
+                if result.get("target_module"):
+                    st.session_state.active_module = result["target_module"]
+                    st.session_state.ai_suggested_params = result.get("suggested_params", {})
+                    st.session_state.ai_context_msg = result["reply"]
+                st.session_state.ai_actions = result.get("actions", [])
                 st.rerun()
 
     # 對話輸入框
@@ -761,15 +1005,17 @@ with col_chat:
         if st.session_state.df is None:
             _add_msg("assistant", "⚠️ 尚未載入資料。請先從側邊欄上傳數據文件或使用範例數據！")
         else:
-            # 1. 偵測模組意圖 → 自動導流（靜默，不產生罐頭回覆）
-            module_key, _ = route_intent(prompt)
-            if module_key:
-                st.session_state.active_module = module_key
-
-            # 2. 一律呼叫 LLM → 產生顧問式回應
+            # 呼叫 LLM → 結構化回應
             with st.spinner("AI 顧問分析中..."):
-                llm_reply = _ask_llm(prompt)
-            _add_msg("assistant", llm_reply)
+                result = _ask_llm_structured(prompt)
+            _add_msg("assistant", result["reply"])
+
+            # 處理結構化結果
+            if result.get("target_module"):
+                st.session_state.active_module = result["target_module"]
+                st.session_state.ai_suggested_params = result.get("suggested_params", {})
+                st.session_state.ai_context_msg = result["reply"]
+            st.session_state.ai_actions = result.get("actions", [])
 
         st.rerun()
 

@@ -11,6 +11,20 @@ from visualization import (
 def render(df: pd.DataFrame):
     st.subheader("📊 數據視覺化 (Tableau 探索風格)")
 
+    # ── AI 推薦面板 ──
+    _ai_ctx = st.session_state.get("ai_context_msg", "")
+    _ai_params = st.session_state.get("ai_suggested_params", {})
+    if _ai_ctx and st.session_state.get("active_module") == "visualization":
+        st.info(f"🤖 **AI 建議：** {_ai_ctx[:200]}...")
+
+    # ── 自動產生的圖表（由 _execute_action 產生）──
+    _auto_fig = st.session_state.pop("_auto_fig", None)
+    if _auto_fig is not None:
+        st.markdown("**🎯 AI 自動產生的圖表：**")
+        _auto_fig.update_layout(height=500, margin=dict(l=20, r=20, t=30, b=20))
+        st.plotly_chart(_auto_fig, use_container_width=True)
+        st.markdown("---")
+
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
     all_cols = df.columns.tolist()
