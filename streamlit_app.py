@@ -30,7 +30,7 @@ if os.path.exists(_css_path):
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # 內嵌關鍵 CSS (確保一定套用，即使外部檔案快取未生效)
-THEME_MODERN_CSS = """
+st.markdown("""
 <style>
 /* 🌐 全局 Glassmorphism 暗黑主題 (搭配 Google Stitch 卡片) */
 
@@ -113,144 +113,7 @@ div[data-testid="stMetric"]:hover {
 .workspace-empty h1 { color: #94a3b8; font-size: 3rem; -webkit-text-fill-color: initial; background: none; }
 .workspace-empty p  { color: #475569; font-size: 0.95rem; }
 </style>
-"""
-
-THEME_CLASSIC_CSS = """
-<style>
-/* 🌐 經典主題：台灣人壽 Teal (#00a89d) 視覺風格 */
-:root {
-    --primary-color: #00a89d;       /* 柔和湖水綠 / 藍綠色 */
-    --background-color: #F8F9FA;    /* 淺灰白背景 */
-    --secondary-background-color: #00a89d; /* 側邊欄背景 */
-    --text-color: #212529;          /* 深灰黑文字 */
-}
-
-.stApp {
-    background-color: #F8F9FA !important;
-    color: #212529 !important;
-    background-image: none !important;
-}
-
-/* 確保所有基礎文字都是深灰色 */
-p, span, div, label, li, .stMarkdown, h1, h2, h3, h4, h5, h6 {
-    color: #212529;
-}
-
-/* 側邊欄 (主題藍綠) */
-section[data-testid="stSidebar"] {
-    background-color: #00a89d !important;
-    border-right: none !important;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.05);
-}
-/* 側邊欄文字維持純白 */
-section[data-testid="stSidebar"] *,
-section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] li {
-    color: #ffffff !important;
-}
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
-    color: #ccfbf1 !important; /* 側邊欄標題使用極淺藍綠 */
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-/* 輸入框與選擇器 (淺藍灰背景，確保文字清晰) */
-div[data-baseweb="select"] > div,
-input[type="text"],
-input[type="number"],
-div[data-baseweb="base-input"] {
-    background-color: #f1f5f9 !important; /* 淺藍灰底色 */
-    border: 1px solid #cbd5e1 !important;
-    color: #1e293b !important;
-}
-*[data-testid="stSelectbox"] *,
-*[data-testid="stMultiSelect"] * {
-    color: #1e293b;
-}
-
-/* 下拉選單的選項背景 */
-ul[data-baseweb="menu"] {
-    background-color: #ffffff !important;
-}
-ul[data-baseweb="menu"] li:hover,
-ul[data-baseweb="menu"] li[aria-selected="true"] {
-    background-color: #e0f2fe !important; /* 選擇項背景：淺藍色 */
-    color: #0284c7 !important;            /* 選擇項文字：深藍色 */
-}
-
-/* 側邊欄經典按鈕 - 半透明 */
-section[data-testid="stSidebar"] .stButton > button {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
-    border-radius: 6px;
-    font-weight: 500;
-}
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background-color: #ffffff !important;
-    border-color: #ffffff !important;
-    color: #00a89d !important; /* Hover時呈現藍綠色文字 */
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-/* 檔案上傳區 */
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-    background-color: rgba(241,245,249,0.95) !important; /* 淺藍灰 */
-    border-radius: 8px;
-    border: 2px dashed #00a89d !important;
-}
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] label,
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p,
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
-section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
-    color: #0f766e !important; /* 深藍綠文字 */
-}
-
-/* 主要標題色 */
-.main h1, .main h2, .main h3 { color: #00a89d !important; background: none; -webkit-text-fill-color: initial; }
-
-/* Metric 卡片 */
-div[data-testid="stMetric"] {
-    border-top: 4px solid #00a89d !important;
-    border-radius: 8px;
-    background-color: #ffffff !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    backdrop-filter: none;
-    padding: 15px;
-}
-
-/* 主按鈕 */
-.main .stButton > button[kind="primary"],
-.main .stButton > button[data-testid="baseButton-primary"] {
-    background: #00a89d !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 6px;
-    font-weight: bold;
-}
-.main .stButton > button[kind="primary"]:hover,
-.main .stButton > button[data-testid="baseButton-primary"]:hover {
-    background: #0d9488 !important;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-/* 工作區佔位 */
-.workspace-empty {
-    text-align: center; margin-top: 60px;
-}
-.workspace-empty h1 { color: #94a3b8 !important; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
-.workspace-empty p  { color: #64748b !important; font-size: 0.95rem; }
-</style>
-"""
-
-if st.session_state.get("app_theme_choice", "時尚 (Modern)") == "時尚 (Modern)":
-    st.markdown(THEME_MODERN_CSS, unsafe_allow_html=True)
-else:
-    st.markdown(THEME_CLASSIC_CSS, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════
@@ -279,7 +142,6 @@ _defaults = {
     "ai_context_msg": "",           # LLM 建議理由（供右側面板顯示）
     "tool_result_summary": None,    # 工具執行結果摘要（供回饋給 LLM）
     "_pending_action": None,        # 待執行的 action（點按鈕後觸發）
-    "app_theme_choice": "時尚 (Modern)",
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -767,19 +629,6 @@ def _profile_data():
 # 側邊欄：LLM 模型選擇器（須在 _profile_data 之前，確保上傳資料時已套用使用者選定的模型）
 # ═══════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### 🎨 介面主題")
-    selected_theme = st.radio(
-        "選擇風格",
-        ["經典 (Classic)", "時尚 (Modern)"],
-        index=0 if st.session_state.app_theme_choice == "經典 (Classic)" else 1,
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    if selected_theme != st.session_state.app_theme_choice:
-        st.session_state.app_theme_choice = selected_theme
-        st.rerun()
-    st.divider()
-
     st.markdown("### 🧠 LLM 模型設定")
 
     llm_source = st.radio(
