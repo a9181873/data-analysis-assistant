@@ -280,7 +280,25 @@ def create_agent_executor(df: pd.DataFrame = None):
         try:
             # 測試模型是否支援 bind_tools
             llm.bind_tools(tools)
-            return create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
+            react_agent = create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
+            
+            def robust_agent_invoke(state: dict) -> dict:
+                try:
+                    # 嘗試以工具代理模式運行
+                    return react_agent.invoke(state)
+                except Exception as runtime_e:
+                    # 若執行時才拋出 400 不支援 tools 的錯誤 (例如部分 Ollama 輕量模型)
+                    err_str = str(runtime_e).lower()
+                    if "does not support tools" in err_str or "unsupported" in err_str or "400" in err_str:
+                        print(f"⚠️ 模型執行期間發生工具調用錯誤，退化為純問答模式: {runtime_e}")
+                        messages = state.get("messages", [])
+                        full_messages = [SystemMessage(content=CONSULTANT_SYSTEM_PROMPT)] + messages
+                        response = llm.invoke(full_messages)
+                        return {"messages": messages + [response]}
+                    # 其他錯誤則拋出給上層處理
+                    raise runtime_e
+
+            return RunnableLambda(robust_agent_invoke)
         except Exception as e:
             # 模型不支援 Tools
             print(f"⚠️ 模型 {config.LLM_MODEL} 不支援 Tool Calling，將退化為純問答模式。({e})")
