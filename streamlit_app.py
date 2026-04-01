@@ -117,15 +117,23 @@ div[data-testid="stMetric"]:hover {
 
 THEME_CLASSIC_CSS = """
 <style>
-/* 🌐 全局強制淺色模式 (覆蓋 Dark Base) */
+/* 🌐 全局強制淺色模式 (透過 CSS 變數覆蓋 Dark Base) */
+:root {
+    --primary-color: #58C9B9;
+    --background-color: #F8F9FA;
+    --secondary-background-color: #519D9E;
+    --text-color: #262730;
+}
+
 .stApp {
     background-color: #F8F9FA !important;
+    color: #262730 !important;
     background-image: none !important;
 }
 
-/* 文本強制轉換為深色 */
-.stApp, .stApp p, .stApp span, .stApp div, .stApp label, .stApp li, .stMarkdown {
-    color: #262730 !important;
+/* 確保所有基礎文字都是深灰色 */
+p, span, div, label, li, .stMarkdown, h1, h2, h3, h4, h5, h6 {
+    color: #262730;
 }
 
 /* LOL Colors 4714 配色 — #9DC8C8, #58C9B9, #519D9E, #D1B6E1 */
@@ -133,10 +141,12 @@ section[data-testid="stSidebar"] {
     background-color: #519D9E !important;
     border-right: none !important;
 }
+/* 側邊欄內文字維持白色 */
 section[data-testid="stSidebar"] *,
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] label {
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] li {
     color: #ffffff !important;
 }
 section[data-testid="stSidebar"] h1,
@@ -146,12 +156,17 @@ section[data-testid="stSidebar"] h3 {
 }
 
 /* 修正輸入框與下拉選單背景 (淺色) */
-.stTextInput > div > div > input,
-.stSelectbox > div > div,
-.stMultiselect > div > div {
+div[data-baseweb="select"] > div,
+input[type="text"],
+input[type="number"],
+div[data-baseweb="base-input"] {
     background-color: #ffffff !important;
     border: 1px solid #ced4da !important;
     color: #262730 !important;
+}
+*[data-testid="stSelectbox"] *,
+*[data-testid="stMultiSelect"] * {
+    color: #262730;
 }
 
 /* 經典按鈕 */
@@ -167,7 +182,7 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     color: #D1B6E1 !important;
 }
 
-/* 修正側邊欄檔案上傳區的字體顏色 */
+/* 檔案上傳區的字體顏色 */
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
     background-color: rgba(255,255,255,0.9) !important;
 }
@@ -189,11 +204,12 @@ div[data-testid="stMetric"] {
     background-color: #ffffff !important;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     backdrop-filter: none;
+    padding: 15px;
 }
 
 /* 主按鈕 */
-.stButton > button[kind="primary"],
-.stButton > button[data-testid="baseButton-primary"] {
+.main .stButton > button[kind="primary"],
+.main .stButton > button[data-testid="baseButton-primary"] {
     background: #58C9B9 !important;
     color: #ffffff !important;
     border: none !important;
@@ -203,8 +219,8 @@ div[data-testid="stMetric"] {
 .workspace-empty {
     text-align: center; margin-top: 60px;
 }
-.workspace-empty h1 { color: #6c757d; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
-.workspace-empty p  { color: #adb5bd; font-size: 0.95rem; }
+.workspace-empty h1 { color: #6c757d !important; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
+.workspace-empty p  { color: #adb5bd !important; font-size: 0.95rem; }
 </style>
 """
 
