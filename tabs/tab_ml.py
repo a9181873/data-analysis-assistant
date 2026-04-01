@@ -666,11 +666,30 @@ def _show_classification_results(res, model_name, feature_cols, le,
                                  X_train=None, X_test=None, y_test=None, preprocessor=None,
                                  code_params=None):
     st.success("分類模型訓練完成!")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Accuracy", f"{res['accuracy']:.4f}")
-    m2.metric("Precision", f"{res['precision']:.4f}")
-    m3.metric("Recall", f"{res['recall']:.4f}")
-    m4.metric("F1 Score", f"{res['f1']:.4f}")
+    
+    # 呼叫 Stitch 渲染的客製化 React 元件
+    import streamlit.components.v1 as components
+    import os
+    
+    _dist_dir = os.path.join(os.path.dirname(__file__), '..', 'frontend_components', 'ml_metrics_card', 'dist')
+    if os.path.exists(_dist_dir):
+        _ml_card_component = components.declare_component("ml_metrics_card", path=_dist_dir)
+        _ml_card_component(
+            accuracy=int(res['accuracy'] * 100),
+            metrics=[
+                {"label": "精確度", "value": f"{res['precision']:.4f}"},
+                {"label": "召回率", "value": f"{res['recall']:.4f}"},
+                {"label": "F1 分數", "value": f"{res['f1']:.4f}"}
+            ],
+            key=f"ml_card_class_{model_name}"
+        )
+    else:
+        # Fallback 舊 UI
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Accuracy", f"{res['accuracy']:.4f}")
+        m2.metric("Precision", f"{res['precision']:.4f}")
+        m3.metric("Recall", f"{res['recall']:.4f}")
+        m4.metric("F1 Score", f"{res['f1']:.4f}")
 
     st.write("**分類報告:**")
     st.text(res['classification_report'])

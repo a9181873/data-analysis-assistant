@@ -73,6 +73,7 @@ docker-compose up --build
 - **雙模式切換**：
     - **雲端模式 (Cloud)**：**[新預設]** 支援 Gemini、GPT-4o、Claude、DeepSeek。具備 API Key 記憶與 **🗑️ 獨立重置按鈕**。
     - **本地模式 (Local)**：完全離線使用 Ollama。推薦 Qwen2.5 7B/14B 以上模型。
+- **Google Stitch 整合 (React Custom Components)**：**[v4.2 新增]** 系統內部整合了由 Google Stitch 生成的 React 毛玻璃 (Glassmorphism) 圖表卡片，並透過 Streamlit Custom Component 機制無縫嵌入 Python 後端，呈現企業級 SaaS 質感的動畫與視覺效果。
 
 ## 📦 主要依賴
 
