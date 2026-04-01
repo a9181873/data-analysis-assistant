@@ -11,7 +11,7 @@
 | 資料視覺化 | Plotly 互動圖表：直方圖、散點圖、盒鬚圖、相關熱圖等 |
 | 統計分析 | 敘述統計、t 檢定、ANOVA、卡方、相關分析、迴歸 |
 | 變數分析 | WOE/IV 分析、特徵重要性、分布檢驗 |
-| 機器學習 | 分類/迴歸建模（LR/RF/XGBoost/LightGBM/CatBoost/LDA）、Optuna 調參、SHAP 可解釋性、模型匯出 |
+| 機器學習 | 分類/迴歸建模（LR/RF/XGBoost/LightGBM/CatBoost/LDA）、Optuna 調參、SHAP 可解釋性、模型匯出、**AI 專家點評** |
 | PSI 監控 | 族群穩定性指數（PSI）計算與視覺化 |
 | RAG 管理 | 上傳文件建立知識庫，供 AI 助手查詢 |
 | AI 助手 | LangChain Agent，具備 **AI Copilot** 模式：自動建議模組、預填參數、一鍵執行與結果回饋 |
@@ -69,9 +69,10 @@ docker-compose up --build
 - **行動按鈕 (Actionable Buttons)**：對話中會出現建議的操作按鈕，點擊後自動跳轉至對應模組。
 - **參數預填 (Param Pre-fill)**：AI 會根據數據內容與您的意圖，預先填入工具面板中的參數（如目標變數、模型名稱、圖表類型等）。
 - **自動執行與回饋**：部分動作支援一鍵執行並將執行結果（如模型準確度、統計摘要）自動發回聊天框，讓 AI 做進一步回饋與建議。
+- **AI 訓練點評 (AI Feedback Loop)**：模型訓練完成後，AI 顧問會自動分析指標與特徵重要性，提供專業的點評與具體的改進建議。
 - **雙模式切換**：
-    - **本地模式 (Ollama)**：完全離線，保護數據隱私（推薦使用 Qwen2.5 或 Llama 3.1 8B 以上模型）。
-    - **雲端模式 (OpenRouter)**：透過 API 使用 GPT-4o、Claude 3.5 Sonnet 等雲端最強模型。
+    - **雲端模式 (Cloud)**：**[新預設]** 支援 Gemini、GPT-4o、Claude、DeepSeek。具備 API Key 記憶與 **🗑️ 獨立重置按鈕**。
+    - **本地模式 (Local)**：完全離線使用 Ollama。推薦 Qwen2.5 7B/14B 以上模型。
 
 ## 📦 主要依賴
 
@@ -82,6 +83,9 @@ docker-compose up --build
 - **SHAP** — 模型可解釋性
 - **ChromaDB + sentence-transformers** — RAG 向量資料庫
 - **Plotly** — 互動視覺化
+- **效能優化與修復**：
+    - **SVM 加速**：針對大型數據集優化 RBF 核 SVM 記憶體使用，並新增 **LinearSVC (線性SVM·快速)**。
+    - **XGBoost 相容性**：修正 Pandas 2.x 下 `AttributeError: 'DataFrame' object has no attribute 'dtype'` 錯誤。
 
 ## 🔧 常見問題
 

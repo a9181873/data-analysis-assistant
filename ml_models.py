@@ -15,7 +15,8 @@ from sklearn.ensemble import (
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold, GridSearchCV
@@ -101,7 +102,18 @@ def get_balanced_models(strategy="none"):
         "SVM (支援向量機)": SVC(
             probability=True,
             class_weight='balanced' if use_balanced else None,
-            random_state=config.DEFAULT_RANDOM_STATE
+            random_state=config.DEFAULT_RANDOM_STATE,
+            cache_size=500,
+            max_iter=5000,
+        ),
+        "LinearSVC (線性SVM·快速)": CalibratedClassifierCV(
+            LinearSVC(
+                class_weight='balanced' if use_balanced else None,
+                random_state=config.DEFAULT_RANDOM_STATE,
+                max_iter=5000,
+                dual='auto',
+            ),
+            cv=3,
         ),
         "KNN (K-近鄰)": KNeighborsClassifier(n_neighbors=5),
         "Naive Bayes (樸素貝葉斯)": GaussianNB(),
@@ -440,6 +452,14 @@ def prepare_data(df, target_column, feature_columns, test_size=None, task_type="
     return X_train_df, X_test_df, y_train, y_test, label_encoder, preprocessor
 
 
+def _to_numpy_if_needed(X, model_name):
+    """將 DataFrame 轉為 numpy array 以避免 XGBoost/LightGBM/CatBoost 與 pandas 2.x 的相容性問題。"""
+    _BOOSTING_KEYWORDS = ('xgboost', 'lightgbm', 'catboost', 'xgb', 'lgbm')
+    if isinstance(X, pd.DataFrame) and any(kw in model_name.lower() for kw in _BOOSTING_KEYWORDS):
+        return X.values
+    return X
+
+
 def train_single_model(model_name, X_train, y_train, X_test, y_test, label_encoder=None):
     """
     訓練單個分類模型並返回評估結果。
@@ -450,8 +470,11 @@ def train_single_model(model_name, X_train, y_train, X_test, y_test, label_encod
 
     from sklearn.base import clone
     model = clone(AVAILABLE_MODELS[model_name])
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+    # 轉換為 numpy 以解決 XGBoost/LightGBM + pandas 2.x 相容性問題
+    X_train_fit = _to_numpy_if_needed(X_train, model_name)
+    X_test_fit = _to_numpy_if_needed(X_test, model_name)
+    model.fit(X_train_fit, y_train)
+    y_pred = model.predict(X_test_fit)
 
     unique_classes = np.unique(y_test)
     average = 'binary' if len(unique_classes) == 2 else 'weighted'
@@ -478,7 +501,7 @@ def train_single_model(model_name, X_train, y_train, X_test, y_test, label_encod
 
     # ROC/AUC (僅二分類)
     if len(unique_classes) == 2 and hasattr(model, 'predict_proba'):
-        y_prob = model.predict_proba(X_test)[:, 1]
+        y_prob = model.predict_proba(X_test_fit)[:, 1]
         fpr, tpr, _ = roc_curve(y_test, y_prob)
         results['roc_auc'] = auc(fpr, tpr)
         results['fpr'] = fpr
@@ -502,8 +525,11 @@ def train_regression_model(model_name, X_train, y_train, X_test, y_test):
 
     from sklearn.base import clone
     model = clone(regression_models[model_name])
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+    # 轉換為 numpy 以解決 XGBoost/LightGBM + pandas 2.x 相容性問題
+    X_train_fit = _to_numpy_if_needed(X_train, model_name)
+    X_test_fit = _to_numpy_if_needed(X_test, model_name)
+    model.fit(X_train_fit, y_train)
+    y_pred = model.predict(X_test_fit)
 
     mse = mean_squared_error(y_test, y_pred)
     return {

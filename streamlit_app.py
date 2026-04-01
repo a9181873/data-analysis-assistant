@@ -109,7 +109,7 @@ _defaults = {
     "last_uploaded_file": None,
     "_trigger_chat_to_dict": False,
     # LLM 選擇器
-    "llm_source": "local",         # "local" or "cloud"
+    "llm_source": "cloud",         # "local" or "cloud"
     "llm_cloud_model_idx": 0,      # CLOUD_MODELS 的索引
     "llm_cloud_api_keys": {},      # {env_key: key_value} 各提供者分開存
     "llm_local_model": None,
@@ -642,13 +642,27 @@ with st.sidebar:
             st.session_state.llm_cloud_api_keys[_env_key] = _existing_key
         else:
             _saved_key = st.session_state.llm_cloud_api_keys.get(_env_key, "")
-            _key_input = st.text_input(
-                f"🔑 {_sel_model['provider']} API Key",
-                type="password",
-                value=_saved_key,
-                placeholder=f"請輸入 {_env_key}",
-                key="api_key_input",
-            )
+            
+            col_input, col_reset = st.columns([4, 1])
+            with col_input:
+                _key_input = st.text_input(
+                    f"🔑 {_sel_model['provider']} API Key",
+                    type="password",
+                    value=_saved_key,
+                    placeholder=f"請輸入 {_env_key}",
+                    key=f"api_key_input_{_env_key}",
+                    label_visibility="collapsed"
+                )
+            
+            with col_reset:
+                if st.button("🗑️", key=f"reset_btn_{_env_key}", help="清除 API Key"):
+                    if _env_key in st.session_state.llm_cloud_api_keys:
+                        st.session_state.llm_cloud_api_keys[_env_key] = ""
+                    if f"api_key_input_{_env_key}" in st.session_state:
+                        del st.session_state[f"api_key_input_{_env_key}"]
+                    st.rerun()
+
+            st.caption(f"🔑 {_sel_model['provider']} API Key")
             st.session_state.llm_cloud_api_keys[_env_key] = _key_input
             if not _key_input:
                 st.warning(f"⚠️ 請輸入 {_sel_model['provider']} API Key")

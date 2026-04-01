@@ -34,6 +34,87 @@ except ImportError:
     SHAP_AVAILABLE = False
 
 
+def _generate_ai_commentary(model_name, task_type, metrics: dict,
+                            feature_importance=None, data_info=None):
+    """
+    呼叫 LLM 對模型結果產生專業點評與建議。
+    回傳 str（AI 的評論文字），若 LLM 不可用則回傳 None。
+    """
+    try:
+        import config as _cfg
+        # 若 LLM 未設定或不可用，靜默跳過
+        if not getattr(_cfg, 'USE_CLOUD_LLM', False):
+            # 檢查本地 Ollama 是否可用
+            try:
+                import requests
+                resp = requests.get(f"{_cfg.OLLAMA_BASE_URL}/api/tags", timeout=2)
+                if resp.status_code != 200:
+                    return None
+            except Exception:
+                return None
+
+        # 構建 prompt
+        metrics_str = "\n".join(f"- {k}: {v}" for k, v in metrics.items()
+                                if isinstance(v, (int, float)))
+        fi_str = ""
+        if feature_importance:
+            top_features = feature_importance[:8]  # 最多顯示前 8 個
+            fi_str = "\n特徵重要性 (Top):\n" + "\n".join(
+                f"- {name}: {imp:.4f}" for name, imp in top_features)
+
+        data_str = ""
+        if data_info:
+            data_str = f"\n資料概況: {data_info}"
+
+        prompt = (
+            f"你是一位資深數據分析顧問。以下是一個 {task_type} 模型的訓練結果，"
+            f"請用繁體中文提供專業但簡潔的點評（3-5 句話），包含：\n"
+            f"1. 模型表現評價（好/普通/差，為什麼）\n"
+            f"2. 可能的問題或風險（如過擬合、類別不平衡等）\n"
+            f"3. 具體的改進建議（如調整超參數、嘗試其他模型、特徵工程等）\n\n"
+            f"模型名稱: {model_name}\n"
+            f"效能指標:\n{metrics_str}"
+            f"{fi_str}"
+            f"{data_str}\n\n"
+            f"請直接回覆點評文字，不要加 JSON 格式，不要加 markdown code block。"
+        )
+
+        # 呼叫 LLM
+        if getattr(_cfg, 'USE_CLOUD_LLM', False) and getattr(_cfg, 'CLOUD_API_KEY', ''):
+            from langchain_openai import ChatOpenAI
+            _extra_headers = {}
+            if "openrouter.ai" in getattr(_cfg, 'CLOUD_BASE_URL', ''):
+                _extra_headers = {
+                    "HTTP-Referer": "https://github.com/a9181873/data-analysis-assistant",
+                    "X-Title": "Data Analysis Assistant",
+                }
+            llm = ChatOpenAI(
+                model=_cfg.LLM_MODEL,
+                api_key=_cfg.CLOUD_API_KEY,
+                base_url=_cfg.CLOUD_BASE_URL,
+                timeout=30,
+                default_headers=_extra_headers or None,
+            )
+        else:
+            from langchain_ollama import ChatOllama
+            llm = ChatOllama(
+                model=_cfg.LLM_MODEL,
+                base_url=_cfg.OLLAMA_BASE_URL,
+                timeout=30,
+            )
+
+        from langchain_core.messages import HumanMessage
+        import re
+        response = llm.invoke([HumanMessage(content=prompt)])
+        text = response.content.strip()
+        # 清除 <think> 標籤
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+        return text
+
+    except Exception:
+        return None
+
+
 def render(df: pd.DataFrame):
     st.subheader("機器學習")
 
@@ -238,6 +319,15 @@ def _render_single_model(df, current_models, target_col, feature_cols,
     
     # 呈現模型深度解說
     _show_model_explanation(model_name, is_regression, is_clustering)
+
+    # SVM 大資料警告
+    _n_rows = len(df)
+    if "SVM (支援向量機)" in model_name and _n_rows > 5000:
+        st.warning(
+            f"⚠️ SVM (RBF 核) 在大資料集 ({_n_rows:,} 筆) 上訓練非常緩慢且佔用大量記憶體 "
+            f"(時間複雜度 O(n³))。**建議改用「LinearSVC (線性SVM·快速)」**，"
+            f"速度快數十倍且記憶體用量低。"
+        )
 
     if st.button("開始訓練", key="train_single"):
         if not feature_cols:
@@ -602,7 +692,9 @@ def _show_classification_results(res, model_name, feature_cols, le,
 
     # --- 風控指標 (二分類 + predict_proba) ---
     if res['roc_auc'] is not None and hasattr(res['model'], 'predict_proba') and y_test is not None:
-        y_prob = res['model'].predict_proba(X_test)[:, 1]
+        from ml_models import _to_numpy_if_needed
+        X_test_np = _to_numpy_if_needed(X_test, model_name)
+        y_prob = res['model'].predict_proba(X_test_np)[:, 1]
         with st.expander("風控指標 (KS / Lift / Gain)"):
             try:
                 ks_val, ks_table = ks_statistic(y_test, y_prob)
@@ -647,6 +739,21 @@ def _show_classification_results(res, model_name, feature_cols, le,
     # --- 程式碼產生 ---
     if code_params:
         _show_code_generator(**code_params)
+
+    # --- AI 點評與建議 ---
+    _show_ai_commentary(
+        model_name, "分類",
+        {
+            "Accuracy": res['accuracy'],
+            "Precision": res['precision'],
+            "Recall": res['recall'],
+            "F1 Score": res['f1'],
+            **({
+                "ROC AUC": res['roc_auc']
+            } if res.get('roc_auc') is not None else {}),
+        },
+        res['model'], feature_cols
+    )
 
 
 def _show_clustering_results(res, model_name, X_df):
@@ -725,6 +832,47 @@ def _show_regression_results_full(res, model_name, feature_cols,
     # --- 程式碼產生 ---
     if code_params:
         _show_code_generator(**code_params)
+
+    # --- AI 點評與建議 ---
+    _show_ai_commentary(
+        model_name, "迴歸",
+        {
+            "R²": res['r2'],
+            "RMSE": res['rmse'],
+            "MAE": res['mae'],
+        },
+        res['model'], feature_cols
+    )
+
+
+def _show_ai_commentary(model_name, task_type_label, metrics, model_obj, feature_cols):
+    """在 UI 中顯示 AI 點評區塊。"""
+    # 取得特徵重要性
+    fi_pairs = None
+    feat_names, importances = get_feature_importance(model_obj, feature_cols)
+    if feat_names is not None and importances is not None:
+        fi_pairs = sorted(zip(feat_names, importances), key=lambda x: -x[1])
+
+    with st.spinner("🧐 AI 正在分析模型結果..."):
+        commentary = _generate_ai_commentary(
+            model_name, task_type_label, metrics,
+            feature_importance=fi_pairs
+        )
+    if commentary:
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+                        border-radius:10px;padding:14px 20px;margin-bottom:8px;">
+                <span style="color:#fff;font-size:1.05rem;font-weight:700;">
+                    🧑‍🏫 AI 顧問點評
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(commentary)
+
 
 def _show_model_export(res, model_name, feature_cols, task_type, preprocessor=None):
     """顯示模型下載按鈕。"""
