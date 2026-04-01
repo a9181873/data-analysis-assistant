@@ -30,7 +30,92 @@ if os.path.exists(_css_path):
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # 內嵌關鍵 CSS (確保一定套用，即使外部檔案快取未生效)
-st.markdown("""
+THEME_MODERN_CSS = """
+<style>
+/* 🌐 全局 Glassmorphism 暗黑主題 (搭配 Google Stitch 卡片) */
+
+/* 1. 全局字體與背景基底 */
+.stApp {
+    background: radial-gradient(circle at top left, #1e293b, #0f172a 70%);
+    color: #e2e8f0;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* 2. 側邊欄 毛玻璃效果 */
+section[data-testid="stSidebar"] {
+    background-color: rgba(15, 23, 42, 0.4) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+section[data-testid="stSidebar"] * {
+    color: #cbd5e1 !important;
+}
+
+/* 3. 標題與強調色 (霓虹紫/藍) */
+h1, h2, h3 {
+    color: #e2e8f0 !important;
+    font-weight: 300 !important;
+    letter-spacing: 0.05em;
+}
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    background: linear-gradient(135deg, #c084fc, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* 4. Streamlit 內建指標卡 (Metrics) 毛玻璃化 */
+div[data-testid="stMetric"] {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 16px;
+    padding: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+div[data-testid="stMetric"]:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    transform: translateY(-2px);
+}
+
+/* 5. 主按鈕設計 */
+.stButton > button[kind="primary"],
+.stButton > button {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #f8fafc !important;
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(59, 130, 246, 0.4)) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+    color: #ffffff !important;
+}
+
+/* 6. 輸入框毛玻璃 */
+.stTextInput > div > div > input,
+.stSelectbox > div > div,
+.stMultiselect > div > div {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #e2e8f0 !important;
+    border-radius: 10px;
+}
+
+/* 工作區佔位 */
+.workspace-empty {
+    text-align: center; color: #64748b; margin-top: 60px;
+}
+.workspace-empty h1 { color: #94a3b8; font-size: 3rem; -webkit-text-fill-color: initial; background: none; }
+.workspace-empty p  { color: #475569; font-size: 0.95rem; }
+</style>
+"""
+
+THEME_CLASSIC_CSS = """
 <style>
 /* LOL Colors 4714 配色 — #9DC8C8, #58C9B9, #519D9E, #D1B6E1 */
 section[data-testid="stSidebar"] {
@@ -73,7 +158,7 @@ section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
 div[data-testid="stMetric"] {
     border-top: 4px solid #58C9B9 !important;
     border-radius: 8px;
-    background-color: #ffffff;
+    background-color: #f8fafc;
 }
 /* 主按鈕 */
 .stButton > button[kind="primary"],
@@ -86,11 +171,15 @@ div[data-testid="stMetric"] {
 .workspace-empty {
     text-align: center; color: #9E9E9E; margin-top: 60px;
 }
-.workspace-empty h1 { color: #E0E0E0; font-size: 3rem; }
-.workspace-empty h3 { color: #BDBDBD; }
+.workspace-empty h1 { color: #E0E0E0; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
 .workspace-empty p  { color: #9E9E9E; font-size: 0.95rem; }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+if st.session_state.get("app_theme_choice", "時尚 (Modern)") == "時尚 (Modern)":
+    st.markdown(THEME_MODERN_CSS, unsafe_allow_html=True)
+else:
+    st.markdown(THEME_CLASSIC_CSS, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════
@@ -119,6 +208,7 @@ _defaults = {
     "ai_context_msg": "",           # LLM 建議理由（供右側面板顯示）
     "tool_result_summary": None,    # 工具執行結果摘要（供回饋給 LLM）
     "_pending_action": None,        # 待執行的 action（點按鈕後觸發）
+    "app_theme_choice": "時尚 (Modern)",
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -606,6 +696,19 @@ def _profile_data():
 # 側邊欄：LLM 模型選擇器（須在 _profile_data 之前，確保上傳資料時已套用使用者選定的模型）
 # ═══════════════════════════════════════════════
 with st.sidebar:
+    st.markdown("### 🎨 介面主題")
+    selected_theme = st.radio(
+        "選擇風格",
+        ["經典 (Classic)", "時尚 (Modern)"],
+        index=0 if st.session_state.app_theme_choice == "經典 (Classic)" else 1,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    if selected_theme != st.session_state.app_theme_choice:
+        st.session_state.app_theme_choice = selected_theme
+        st.rerun()
+    st.divider()
+
     st.markdown("### 🧠 LLM 模型設定")
 
     llm_source = st.radio(
