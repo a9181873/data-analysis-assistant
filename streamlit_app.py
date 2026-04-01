@@ -117,15 +117,26 @@ div[data-testid="stMetric"]:hover {
 
 THEME_CLASSIC_CSS = """
 <style>
+/* 🌐 全局強制淺色模式 (覆蓋 Dark Base) */
+.stApp {
+    background-color: #F8F9FA !important;
+    background-image: none !important;
+}
+
+/* 文本強制轉換為深色 */
+.stApp, .stApp p, .stApp span, .stApp div, .stApp label, .stApp li, .stMarkdown {
+    color: #262730 !important;
+}
+
 /* LOL Colors 4714 配色 — #9DC8C8, #58C9B9, #519D9E, #D1B6E1 */
 section[data-testid="stSidebar"] {
     background-color: #519D9E !important;
+    border-right: none !important;
 }
-section[data-testid="stSidebar"] .stMarkdown,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] *,
 section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] span {
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] label {
     color: #ffffff !important;
 }
 section[data-testid="stSidebar"] h1,
@@ -133,6 +144,17 @@ section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 {
     color: #D1B6E1 !important;
 }
+
+/* 修正輸入框與下拉選單背景 (淺色) */
+.stTextInput > div > div > input,
+.stSelectbox > div > div,
+.stMultiselect > div > div {
+    background-color: #ffffff !important;
+    border: 1px solid #ced4da !important;
+    color: #262730 !important;
+}
+
+/* 經典按鈕 */
 section[data-testid="stSidebar"] .stButton > button {
     background-color: rgba(255, 255, 255, 0.15) !important;
     color: #ffffff !important;
@@ -144,7 +166,11 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     border-color: #D1B6E1 !important;
     color: #D1B6E1 !important;
 }
+
 /* 修正側邊欄檔案上傳區的字體顏色 */
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    background-color: rgba(255,255,255,0.9) !important;
+}
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] label,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p,
@@ -152,27 +178,33 @@ section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
     color: #495057 !important;
 }
+
 /* 主要標題色 */
-.main h1, .main h2, .main h3 { color: #519D9E !important; }
+.main h1, .main h2, .main h3 { color: #519D9E !important; background: none; -webkit-text-fill-color: initial; }
+
 /* Metric 卡片頂邊線 */
 div[data-testid="stMetric"] {
     border-top: 4px solid #58C9B9 !important;
     border-radius: 8px;
-    background-color: #f8fafc;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    backdrop-filter: none;
 }
+
 /* 主按鈕 */
 .stButton > button[kind="primary"],
 .stButton > button[data-testid="baseButton-primary"] {
-    background-color: #58C9B9 !important;
+    background: #58C9B9 !important;
     color: #ffffff !important;
     border: none !important;
 }
+
 /* 工作區佔位 */
 .workspace-empty {
-    text-align: center; color: #9E9E9E; margin-top: 60px;
+    text-align: center; margin-top: 60px;
 }
-.workspace-empty h1 { color: #E0E0E0; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
-.workspace-empty p  { color: #9E9E9E; font-size: 0.95rem; }
+.workspace-empty h1 { color: #6c757d; font-size: 3rem; background: none; -webkit-text-fill-color: initial;}
+.workspace-empty p  { color: #adb5bd; font-size: 0.95rem; }
 </style>
 """
 
