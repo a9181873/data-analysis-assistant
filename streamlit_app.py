@@ -117,31 +117,32 @@ div[data-testid="stMetric"]:hover {
 
 THEME_CLASSIC_CSS = """
 <style>
-/* 🌐 全局強制淺色模式 (透過 CSS 變數覆蓋 Dark Base) */
+/* 🌐 經典主題：台灣人壽 (CTBC) 品牌視覺風格 */
 :root {
-    --primary-color: #58C9B9;
-    --background-color: #F8F9FA;
-    --secondary-background-color: #519D9E;
-    --text-color: #262730;
+    --primary-color: #00A859;       /* CTBC 品牌綠 */
+    --background-color: #F8F9FA;    /* 淺灰白背景 */
+    --secondary-background-color: #00A859; /* 側邊欄背景 */
+    --text-color: #212529;          /* 深灰黑文字 */
 }
 
 .stApp {
     background-color: #F8F9FA !important;
-    color: #262730 !important;
+    color: #212529 !important;
     background-image: none !important;
 }
 
 /* 確保所有基礎文字都是深灰色 */
 p, span, div, label, li, .stMarkdown, h1, h2, h3, h4, h5, h6 {
-    color: #262730;
+    color: #212529;
 }
 
-/* LOL Colors 4714 配色 — #9DC8C8, #58C9B9, #519D9E, #D1B6E1 */
+/* 台灣人壽風格 - 左側欄 (品牌綠) */
 section[data-testid="stSidebar"] {
-    background-color: #519D9E !important;
+    background-color: #00A859 !important;
     border-right: none !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
 }
-/* 側邊欄內文字維持白色 */
+/* 側邊欄文字維持純白 */
 section[data-testid="stSidebar"] *,
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
@@ -152,67 +153,79 @@ section[data-testid="stSidebar"] li {
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 {
-    color: #D1B6E1 !important;
+    color: #F04E23 !important; /* CTBC 品牌橘 (取代紫粉色) */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-/* 修正輸入框與下拉選單背景 (淺色) */
+/* 輸入框與選擇器 (維持網頁通用乾淨白) */
 div[data-baseweb="select"] > div,
 input[type="text"],
 input[type="number"],
 div[data-baseweb="base-input"] {
     background-color: #ffffff !important;
     border: 1px solid #ced4da !important;
-    color: #262730 !important;
+    color: #212529 !important;
 }
 *[data-testid="stSelectbox"] *,
 *[data-testid="stMultiSelect"] * {
-    color: #262730;
+    color: #212529;
 }
 
-/* 經典按鈕 */
+/* 側邊欄經典按鈕 - 半透明與橘色 Hover */
 section[data-testid="stSidebar"] .stButton > button {
-    background-color: rgba(255, 255, 255, 0.15) !important;
+    background-color: rgba(255, 255, 255, 0.2) !important;
     color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
     border-radius: 6px;
+    font-weight: 500;
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background-color: rgba(255, 255, 255, 0.25) !important;
-    border-color: #D1B6E1 !important;
-    color: #D1B6E1 !important;
+    background-color: #F04E23 !important; /* CTBC 品牌橘 */
+    border-color: #F04E23 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
 
 /* 檔案上傳區的字體顏色 */
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-    background-color: rgba(255,255,255,0.9) !important;
+    background-color: rgba(255,255,255,0.95) !important;
+    border-radius: 8px;
+    border: 2px dashed #00A859 !important;
 }
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] label,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] p,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
-    color: #495057 !important;
+    color: #00A859 !important;
 }
 
-/* 主要標題色 */
-.main h1, .main h2, .main h3 { color: #519D9E !important; background: none; -webkit-text-fill-color: initial; }
+/* 主要標題色 (深藍綠或深灰) */
+.main h1, .main h2, .main h3 { color: #005A32 !important; background: none; -webkit-text-fill-color: initial; }
 
-/* Metric 卡片頂邊線 */
+/* Metric 卡片 (白色乾淨卡片＋品牌綠邊線) */
 div[data-testid="stMetric"] {
-    border-top: 4px solid #58C9B9 !important;
+    border-top: 4px solid #00A859 !important;
     border-radius: 8px;
     background-color: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     backdrop-filter: none;
     padding: 15px;
 }
 
-/* 主按鈕 */
+/* 主按鈕 (品牌綠) */
 .main .stButton > button[kind="primary"],
 .main .stButton > button[data-testid="baseButton-primary"] {
-    background: #58C9B9 !important;
+    background: #00A859 !important;
     color: #ffffff !important;
     border: none !important;
+    border-radius: 6px;
+    font-weight: bold;
+}
+.main .stButton > button[kind="primary"]:hover,
+.main .stButton > button[data-testid="baseButton-primary"]:hover {
+    background: #008245 !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
 /* 工作區佔位 */
