@@ -897,6 +897,232 @@ def tune_with_optuna(model_name, X_train, y_train, n_trials=50,
     }
 
 
+def compare_models_cv(X, y, model_names=None, n_folds=None,
+                      task_type="classification", scoring=None,
+                      balancing_strategy="none"):
+    """
+    以 K-fold 交叉驗證比較多個候選模型（對應實戰流程：CV + roc_auc 選模）。
+
+    Args:
+        X, y: 已前處理的特徵與目標
+        model_names: 候選模型清單（預設取 3 個常用模型加速）
+        n_folds: 折數（預設 config.DEFAULT_CV_FOLDS）
+        scoring: 評分指標（分類預設 roc_auc，迴歸預設 r2）
+        balancing_strategy: "none" | "class_weight"（不平衡資料建議）
+
+    Returns:
+        (comparison_df, cv_results_list)
+        - comparison_df: 模型 / 平均 / 標準差 / 各折分數
+        - cv_results_list: 相容 plot_kfold_results 的箱型圖資料
+    """
+    from sklearn.base import clone
+
+    if n_folds is None:
+        n_folds = config.DEFAULT_CV_FOLDS
+    if scoring is None:
+        scoring = 'roc_auc' if task_type == "classification" else 'r2'
+    if balancing_strategy == "class_weight":
+        candidates = get_balanced_models("class_weight")
+    elif model_names:
+        candidates = {k: v for k, v in _get_available_models().items()
+                      if k in model_names}
+    else:
+        # 預設候選：快速且具代表性的三種路徑
+        preferred = ["Logistic Regression (邏輯迴歸)",
+                     "Random Forest (隨機森林)", "XGBoost"]
+        candidates = {k: v for k, v in _get_available_models().items()
+                      if k in preferred}
+        if not candidates:
+            candidates = dict(list(_get_available_models().items())[:3])
+
+    cv = (StratifiedKFold(n_splits=n_folds, shuffle=True,
+                          random_state=config.DEFAULT_RANDOM_STATE)
+          if task_type == "classification"
+          else KFold(n_splits=n_folds, shuffle=True,
+                     random_state=config.DEFAULT_RANDOM_STATE))
+
+    rows = []
+    cv_results_list = []
+    fitted_models = {}
+    X_arr = X.values if isinstance(X, pd.DataFrame) else X
+
+    for name, base_model in candidates.items():
+        try:
+            model = clone(base_model)
+            scores = cross_val_score(model, X_arr, y, cv=cv, scoring=scoring,
+                                     n_jobs=-1)
+            rows.append({
+                "模型": name,
+                f"{scoring} 平均": round(float(scores.mean()), 4),
+                "標準差": round(float(scores.std()), 4),
+                "各折": ", ".join(f"{s:.3f}" for s in scores),
+            })
+            cv_results_list.append({
+                "model_name": name,
+                "scoring": scoring,
+                "scores": scores.tolist(),
+            })
+            fitted_models[name] = clone(base_model).fit(X_arr, y)
+        except Exception as e:
+            rows.append({"模型": name, f"{scoring} 平均": f"錯誤: {e}",
+                         "標準差": "-", "各折": "-"})
+            continue
+
+    comparison_df = pd.DataFrame(rows)
+    if not comparison_df.empty and scoring in ('roc_auc', 'f1', 'accuracy', 'r2'):
+        numeric_mask = comparison_df[f"{scoring} 平均"].apply(
+            lambda v: isinstance(v, (int, float)))
+        if numeric_mask.any():
+            best_row = comparison_df.loc[numeric_mask].sort_values(
+                f"{scoring} 平均", ascending=False).iloc[0]
+            return comparison_df, cv_results_list, best_row["模型"], fitted_models
+    return comparison_df, cv_results_list, None, fitted_models
+
+
+def undersample_ratio(X, y, ratio=10, random_state=None):
+    """
+    欠採樣多數類至指定比例（對應實戰筆記的「非事件抽樣 事件數×10」做法）。
+    僅適用二元分類。
+
+    Returns:
+        (X_resampled, y_resampled, info_dict)
+    """
+    if random_state is None:
+        random_state = config.DEFAULT_RANDOM_STATE
+    y_ser = pd.Series(y).reset_index(drop=True)
+    vc = y_ser.value_counts()
+    if len(vc) != 2:
+        raise ValueError("undersample_ratio 僅適用二元目標")
+
+    minority_label = vc.idxmin()
+    majority_label = vc.idxmax()
+    minority_idx = y_ser[y_ser == minority_label].index
+    majority_idx = y_ser[y_ser == majority_label].index
+
+    target_majority_n = min(len(majority_idx), len(minority_idx) * ratio)
+    rng = np.random.default_rng(random_state)
+    keep_majority = rng.choice(majority_idx, size=target_majority_n, replace=False)
+
+    keep = np.sort(np.concatenate([minority_idx.to_numpy(), keep_majority]))
+    X_out = (X.iloc[keep] if isinstance(X, pd.DataFrame) else X[keep])
+    y_out = y_ser.iloc[keep]
+
+    info = {
+        "minority_label": str(minority_label), "majority_label": str(majority_label),
+        "minority_n": int(len(minority_idx)), "original_n": int(len(y_ser)),
+        "resampled_n": int(len(y_out)), "majority_sampled_to": int(target_majority_n),
+    }
+    return X_out, y_out, info
+
+
+def optimize_threshold(y_true, y_prob, strategy="youden", target_recall=None):
+    """
+    分類閾值優化 — 不平衡資料的關鍵最後一里路。
+    預設閾值 0.5 在不平衡場景幾乎必錯；此函式依策略找出最佳切點。
+
+    Args:
+        y_true: 真實標籤 (0/1)
+        y_prob: 正類預測機率
+        strategy:
+            - "youden": Youden J statistic (TPR - FPR 最大化)，兼顧兩端
+            - "f1": F1 最大化（少數類精確率與召回的平衡點）
+            - "recall": 達到指定 target_recall 的最小閾值（寧可錯殺不可放過）
+    Returns:
+        dict: {threshold, strategy, metrics_before(0.5), metrics_after}
+    """
+    from sklearn.metrics import roc_curve, f1_score
+
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+
+    def _metrics(th):
+        pred = (y_prob >= th).astype(int)
+        tp = int(((pred == 1) & (y_true == 1)).sum())
+        fp = int(((pred == 1) & (y_true == 0)).sum())
+        fn = int(((pred == 0) & (y_true == 1)).sum())
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        return {"threshold": round(float(th), 4), "precision": round(precision, 4),
+                "recall": round(recall, 4), "f1": round(f1, 4)}
+
+    before = _metrics(0.5)
+
+    if strategy == "recall" and target_recall is not None:
+        # 找出達到目標召回的最寬鬆閾值
+        order = np.argsort(-y_prob)
+        y_sorted = y_true[order]
+        tps = np.cumsum(y_sorted)
+        total_pos = max(y_true.sum(), 1)
+        recalls = tps / total_pos
+        idx = np.searchsorted(recalls, target_recall)
+        idx = min(idx, len(y_prob) - 1)
+        best_th = float(y_prob[order][idx])
+    else:
+        fpr, tpr, thresholds = roc_curve(y_true, y_prob)
+        if strategy == "f1":
+            scores = [f1_score(y_true, (y_prob >= t).astype(int), zero_division=0)
+                      for t in thresholds]
+            best_th = float(thresholds[int(np.argmax(scores))])
+        else:  # youden
+            j_scores = tpr - fpr
+            best_th = float(thresholds[int(np.argmax(j_scores))])
+
+    after = _metrics(best_th)
+    return {"strategy": strategy, **after,
+            "default_05": before,
+            "note": (f"閾值由 0.50 調整為 {after['threshold']:.3f}："
+                     f"F1 {before['f1']}→{after['f1']}、"
+                     f"Recall {before['recall']}→{after['recall']}")}
+
+
+def train_test_roc_check(model_name, X_train, y_train, X_test, y_test):
+    """
+    訓練集 vs 測試集 ROC 疊圖檢查（過擬合診斷）。
+    對應實戰筆記中「Receiver operating characteristic Train/Test」兩張疊圖的做法。
+
+    Returns:
+        dict: {
+          train: {fpr, tpr, auc}, test: {fpr, tpr, auc},
+          auc_gap, overfit_level, diagnosis, model_name
+        }
+    """
+    if model_name not in AVAILABLE_MODELS:
+        raise ValueError(f"不支援的模型: {model_name}")
+
+    from sklearn.base import clone
+    model = clone(AVAILABLE_MODELS[model_name])
+    X_tr = _to_numpy_if_needed(X_train, model_name)
+    X_te = _to_numpy_if_needed(X_test, model_name)
+    model.fit(X_tr, y_train)
+
+    out = {"model_name": model_name}
+    aucs = {}
+    for split_name, X_split, y_split in (("train", X_tr, y_train),
+                                         ("test", X_te, y_test)):
+        prob = model.predict_proba(X_split)[:, 1]
+        fpr, tpr, _ = roc_curve(y_split, prob)
+        auc_val = float(auc(fpr, tpr))
+        out[split_name] = {"fpr": fpr, "tpr": tpr, "auc": auc_val}
+        aucs[split_name] = auc_val
+
+    auc_gap = aucs["train"] - aucs["test"]
+    out["auc_gap"] = round(float(auc_gap), 4)
+
+    if auc_gap < 0.02:
+        level, diag = "低", ("訓練/測試 AUC 差距 < 0.02，模型泛化良好，無明顯過擬合。")
+    elif auc_gap < 0.05:
+        level, diag = "中", ("AUC 差距 0.02~0.05，有輕微過擬合跡象，"
+                             "可接受；可嘗試增加正則化或簡化模型。")
+    else:
+        level, diag = "高", ("AUC 差距 > 0.05，明顯過擬合！"
+                             "建議：降低樹深度 / 增加 min_samples_leaf / "
+                             "加強 L1-L2 正則化 / 增加訓練樣本。")
+    out["overfit_level"] = level
+    out["diagnosis"] = diag
+    return out
+
+
 if __name__ == '__main__':
     from sklearn.datasets import load_iris, load_diabetes
     import warnings

@@ -6,12 +6,18 @@ import os
 from data_loader import load_data
 from psi import calculate_psi, calculate_psi_report
 from visualization import plot_psi_comparison, plot_distribution_shift
+from theory import render_theory
 import config
 
 
 def render(df: pd.DataFrame):
     st.subheader("模型監控 (PSI)")
-    st.caption("上傳監控期資料，比較變數分佈是否偏移。基準期使用目前載入的資料。")
+    _cap1, _cap2 = st.columns([4, 1])
+    with _cap1:
+        st.caption("上傳監控期資料，比較變數分佈是否偏移。基準期使用目前載入的資料。")
+    with _cap2:
+        render_theory("psi")
+        render_theory("ks_statistic", label="📖 KS 是什麼？")
 
     st.write(f"**基準期資料:** {len(df)} 行 x {len(df.columns)} 列")
 

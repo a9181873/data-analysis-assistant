@@ -8,6 +8,7 @@ import numpy as np
 import json
 import config
 from data_preprocessing import handle_missing_values, convert_data_type
+from theory import render_theory
 
 
 # ──────────────────────────────────────────────
@@ -118,6 +119,7 @@ def _ai_generate_description(col_name: str, series: pd.Series) -> str:
 
 def render(df: pd.DataFrame):
     st.subheader("變數分析與處理")
+    render_theory("impute_strategy", label="📖 補值策略怎麼選？")
 
     # ── AI 推薦面板 ──
     _ai_ctx = st.session_state.get("ai_context_msg", "")

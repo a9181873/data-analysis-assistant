@@ -29,11 +29,15 @@ CLOUD_MODELS = [
     {"id": "o3-mini",      "provider": "OpenAI",      "rating": "⭐⭐⭐⭐",  "note": "推理專用，數學邏輯好",
      "base_url": "https://api.openai.com/v1",          "env_key": "OPENAI_API_KEY"},
     # --- Google Gemini (需要 GEMINI_API_KEY) ---
-    {"id": "gemini-2.5-flash-preview-05-20", "provider": "Google", "rating": "⭐⭐⭐⭐⭐", "note": "便宜快速，數據分析性價比最高",
+    # 🆓 免費 key：https://aistudio.google.com → Get API key（不需綁卡）
+    {"id": "gemini-2.5-flash", "provider": "Google", "rating": "🆓⭐⭐⭐⭐⭐", "note": "免費層可用！快速+中文好，數據分析首選",
      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "env_key": "GEMINI_API_KEY"},
-    {"id": "gemini-2.5-pro-preview-06-05",   "provider": "Google", "rating": "⭐⭐⭐⭐⭐", "note": "旗艦級推理，複雜分析首選",
+    {"id": "gemini-2.5-pro",   "provider": "Google", "rating": "🆓⭐⭐⭐⭐⭐", "note": "旗艦級推理，複雜分析首選（免費層有速率限制）",
      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "env_key": "GEMINI_API_KEY"},
     # --- OpenRouter (需要 OPENROUTER_API_KEY，一個 key 用所有模型) ---
+    {"id": "deepseek/deepseek-chat-v3-0324:free", "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐",
+     "note": "免費層 DeepSeek V3（有速率限制），零成本入門首選",
+     "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
     {"id": "anthropic/claude-sonnet-4",  "provider": "OpenRouter", "rating": "⭐⭐⭐⭐⭐", "note": "推理最強，程式碼與分析頂級",
      "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
     {"id": "deepseek/deepseek-r1",      "provider": "OpenRouter", "rating": "⭐⭐⭐⭐⭐", "note": "深度推理，數學邏輯最強",

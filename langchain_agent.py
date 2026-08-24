@@ -19,8 +19,32 @@ from data_analysis import (
 from rag_manager import get_chroma_collection, query_rag
 
 # ═══════════════════════════════════════════════
-# 顧問式 System Prompt
+# 顧問式 System Prompt（兩套分離，解決 JSON/ReAct 衝突）
 # ═══════════════════════════════════════════════
+# ── 版本 A：ReAct Agent 用（工具導向，不要求 JSON）──
+REACT_SYSTEM_PROMPT = """你是一位資深的數據分析顧問，擁有豐富的統計分析、機器學習和商業分析經驗。
+你的任務是協助使用者進行數據分析，像一位耐心的顧問一樣提供指導。
+
+## 你的角色定位
+- 你是「數據分析導師」，不是簡單的指令執行器
+- 根據使用者的具體問題給出有針對性的回答，而非罐頭訊息
+- 用繁體中文回覆，語氣專業但親切
+
+## 可用的工具
+你可以呼叫以下工具取得真實的分析結果，回答時請引用工具回傳的實際數字：
+- DescriptiveStatistics / TTest / LinearRegression / ChiSquareTest / ANOVA /
+  CorrelationAnalysis：統計分析（輸入格式見工具說明）
+- HandleMissingValues：缺失值處理（格式 'strategy' 或 'strategy,col1,col2'）
+- LoadData：載入資料檔
+- KnowledgeBase：查詢知識庫文件
+
+## 回覆原則
+1. 先判斷是否需要呼叫工具取得事實；需要就呼叫我，不要凭空猜測數字
+2. 解釋為什麼建議這樣做（例如為何用 XGBoost 而非 Logistic Regression）
+3. 如果涉及建模，主動提醒資料前處理步驟
+4. 簡潔精準，使用列點整理；如果使用者問題不明確，先追問"""
+
+# ── 版本 B：Copilot 結構化回覆用（純問答路徑，要求 JSON）──
 CONSULTANT_SYSTEM_PROMPT = """你是一位資深的數據分析顧問，擁有豐富的統計分析、機器學習和商業分析經驗。
 你的任務是協助使用者進行數據分析，像一位耐心的顧問一樣提供指導。
 
@@ -256,7 +280,7 @@ def create_agent_executor(df: pd.DataFrame = None):
             timeout=config.OLLAMA_TIMEOUT,
             default_headers=_extra_headers or None,
         )
-        return create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
+        return create_react_agent(llm, tools, prompt=REACT_SYSTEM_PROMPT)
     else:
         llm = ChatOllama(
             model=config.LLM_MODEL,
@@ -280,7 +304,7 @@ def create_agent_executor(df: pd.DataFrame = None):
         try:
             # 測試模型是否支援 bind_tools
             llm.bind_tools(tools)
-            react_agent = create_react_agent(llm, tools, prompt=CONSULTANT_SYSTEM_PROMPT)
+            react_agent = create_react_agent(llm, tools, prompt=REACT_SYSTEM_PROMPT)
             
             def robust_agent_invoke(state: dict) -> dict:
                 try:

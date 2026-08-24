@@ -36,3 +36,6 @@ chroma_db/
 .env
 .env.*
 secrets.toml
+
+# Test datasets (downloaded public data - see test_*.py scripts for URLs)
+test_datasets/

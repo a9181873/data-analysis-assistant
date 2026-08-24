@@ -9,6 +9,9 @@ import pandas as pd
 import os
 import config
 from data_loader import load_data
+from profiler import build_data_profile, format_profile_for_llm
+from advisor import generate_advice_report
+from theory import render_theory
 
 # Tab 模組（現在作為動態工具面板使用）
 from tabs import tab_data_preview, tab_variable_analysis, tab_visualization
@@ -142,6 +145,12 @@ _defaults = {
     "ai_context_msg": "",           # LLM 建議理由（供右側面板顯示）
     "tool_result_summary": None,    # 工具執行結果摘要（供回饋給 LLM）
     "_pending_action": None,        # 待執行的 action（點按鈕後觸發）
+    # ── 分析流程記憶與工作流 ──
+    "findings": [],                 # 分析發現清單（供後續對話引用）
+    "workflow_stage": None,         # 當前流程階段
+    "data_profile": None,           # 快取的資料剖析報告
+    "advice_actions": [],           # 健檢報告產生的 action 按鈕
+    "export_payload": None,         # 預測結果匯出暫存 {data, filename, label}
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -258,30 +267,31 @@ def _add_msg(role: str, content: str):
 
 
 def _build_data_context() -> str:
-    """根據目前載入的 DataFrame 建立精簡的數據摘要（限制最多 15 個欄位以節省 Token）。"""
+    """建立深度資料剖析摘要供 LLM 引用真實數字（快取於 session_state）。"""
     df = st.session_state.df
     if df is None:
         return ""
+    # 剖析結果快取：同一次上傳只剖析一次
+    if (st.session_state.data_profile is None
+            or st.session_state.get("_profile_shape") != df.shape):
+        try:
+            st.session_state.data_profile = build_data_profile(df)
+            st.session_state._profile_shape = df.shape
+        except Exception:
+            return ""
+    return format_profile_for_llm(st.session_state.data_profile)
 
-    n_rows, n_cols = df.shape
-    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-    missing_total = int(df.isnull().sum().sum())
 
-    MAX_COLS = 15
-    shown_cols = list(df.columns[:MAX_COLS])
-    col_names = ', '.join(shown_cols)
-    if n_cols > MAX_COLS:
-        col_names += f' ... (共 {n_cols} 欄)'
-
-    context = (
-        f"資料: {n_rows} 筆 x {n_cols} 欄\n"
-        f"數值欄位({len(numeric_cols)}): {', '.join(numeric_cols[:MAX_COLS])}\n"
-        f"類別欄位({len(cat_cols)}): {', '.join(cat_cols[:MAX_COLS]) if cat_cols else '無'}\n"
-        f"缺失值: {missing_total}\n"
-        f"欄位: {col_names}"
-    )
-    return context
+def _add_finding(tool: str, summary: str, stage: str = None):
+    """記錄一條分析發現，供後續對話引用（分析記憶）。"""
+    st.session_state.findings.append({
+        "tool": tool,
+        "summary": summary,
+        "stage": stage or st.session_state.get("workflow_stage") or "explore",
+    })
+    # 只保留最近 20 條
+    if len(st.session_state.findings) > 20:
+        st.session_state.findings = st.session_state.findings[-20:]
 
 
 def _ask_llm_structured(question: str) -> dict:
@@ -318,6 +328,14 @@ def _ask_llm_structured(question: str) -> dict:
         augmented = question
         if data_context:
             augmented = f"{data_context}\n\n使用者問題: {question}"
+
+        # ── 注入分析記憶（findings）──
+        findings = st.session_state.get("findings", [])
+        if findings:
+            recent_f = findings[-8:]
+            f_lines = [f"- [{f['tool']}] {f['summary']}" for f in recent_f]
+            augmented = ("以下是本次分析過程中已確認的發現，回答時請引用相關內容：\n"
+                         + "\n".join(f_lines) + "\n\n" + augmented)
 
         # ── RAG 增強 ──
         try:
@@ -543,6 +561,148 @@ def _execute_action(action: dict):
             st.session_state.active_module = "psi_monitoring"
             result_text = "已開啟 **模型監控 (PSI)** 面板。"
 
+        # ═══ 健檢報告產生的新 actions ═══
+        elif module == "apply_missing_strategy":
+            from data_preprocessing import handle_missing_values
+            col_strategies = params.get("column_strategies", {})
+            processed = handle_missing_values(df, column_strategies=col_strategies)
+            st.session_state.df = processed
+            st.session_state.data_profile = None  # 剖析快取失效
+            n_cols_applied = len(col_strategies)
+            result_text = (
+                f"✅ 已依建議策略補值 **{n_cols_applied}** 個欄位，剩餘缺失值 "
+                f"**{int(processed.isnull().sum().sum())}** 個。"
+            )
+            _add_finding("遺漏值處理",
+                         f"已對 {n_cols_applied} 欄套用逐欄補值策略，"
+                         f"剩餘缺失 {int(processed.isnull().sum().sum())}",
+                         stage="prepare")
+
+        elif module == "drop_columns":
+            cols_to_drop = [c for c in params.get("columns", []) if c in df.columns]
+            st.session_state.df = df.drop(columns=cols_to_drop)
+            st.session_state.data_profile = None
+            result_text = f"🗑️ 已捨棄 **{len(cols_to_drop)}** 個高缺失欄位：{', '.join(f'`{c}`' for c in cols_to_drop)}"
+            _add_finding("資料清理", f"捨棄高缺失欄位: {', '.join(cols_to_drop)}", stage="prepare")
+
+        elif module == "drop_duplicates":
+            before = len(df)
+            st.session_state.df = df.drop_duplicates().reset_index(drop=True)
+            removed = before - len(st.session_state.df)
+            st.session_state.data_profile = None
+            result_text = f"🧹 已移除 **{removed}** 列完全重複的資料（剩 {len(st.session_state.df):,} 列）。"
+            _add_finding("資料清理", f"移除重複列 {removed}", stage="prepare")
+
+        elif module == "iv_table":
+            from feature_selection import iv_ranking
+            target_col = params.get("target_col")
+            feats = (params.get("numeric_features") or []) + (params.get("categorical_features") or [])
+            feats = [f for f in feats if f != target_col] or [c for c in df.columns if c != target_col]
+            with st.spinner("計算 WOE/IV 排名中..."):
+                iv_table, drop_iv, leak_iv = iv_ranking(df, target_col, feats)
+            st.session_state.active_module = "statistics"
+            st.session_state.ai_suggested_params = {"analysis_type": "WOE/IV 分析"}
+            result_text = "**📊 WOE/IV 變數預測力排名**\n\n" + iv_table.head(15).to_markdown(index=False)
+            if drop_iv:
+                result_text += f"\n\n❌ IV<0.02 建議剔除：{', '.join(f'`{d}`' for d in drop_iv)}"
+            if leak_iv:
+                result_text += f"\n\n⚠️ IV≥0.5 疑似洩漏（請人工確認業務邏輯）：{', '.join(f'`{d}`' for d in leak_iv)}"
+            _add_finding("WOE/IV 篩選",
+                         f"IV 前3名: {', '.join(iv_table.head(3)['feature'])}"
+                         + (f"；建議剔除 {len(drop_iv)} 個弱變數" if drop_iv else ""),
+                         stage="explore")
+
+        elif module == "feature_select_suite":
+            from feature_selection import run_full_suite, format_suite_report
+            with st.spinner("特徵海選執行中（單變量→相關擇優→RFE→AIC）..."):
+                suite = run_full_suite(
+                    df, params.get("target_col"),
+                    numeric_features=params.get("numeric_features"),
+                    categorical_features=params.get("categorical_features"),
+                    task_type=params.get("task_type", "classification"))
+            result_text = format_suite_report(suite)
+            final_feats = suite["final_features"]
+            result_text += "\n\n下一步：用此特徵集建模 → 點擊下方按鈕。"
+            _add_finding("特徵海選",
+                         f"{suite['n_original']} 變數收斂至 {suite['n_final']} 個："
+                         f"{', '.join(map(str, final_feats[:8]))}"
+                         + ("..." if len(final_feats) > 8 else ""),
+                         stage="explore")
+            # 附帶一鍵建模按鈕
+            st.session_state.ai_actions = [{
+                "label": f"🤖 用 {len(final_feats)} 個篩選後特徵建立模型",
+                "module": "ml_compare",
+                "params": {"task_type": params.get("task_type", "classification"),
+                           "target_col": params.get("target_col"),
+                           "feature_cols": final_feats},
+            }]
+
+        elif module == "ml_compare":
+            from ml_models import compare_models_cv, train_test_roc_check, prepare_data, undersample_ratio, get_balanced_models
+            task_type = params.get("task_type", "classification")
+            target_col = params.get("target_col")
+            feature_cols = params.get("feature_cols") or [c for c in df.columns if c != target_col]
+            balancing = params.get("balancing", "none")
+            work_df = df
+
+            with st.spinner("候選模型交叉驗證中..."):
+                # 欠採樣平衡
+                balance_note = ""
+                if balancing == "undersample_10x" and task_type == "classification":
+                    feats_all = feature_cols + [target_col]
+                    sub = work_df[feats_all].dropna()
+                    X_r, y_r, info_r = undersample_ratio(sub[feature_cols], sub[target_col], ratio=10)
+                    work_df = pd.concat([X_r, y_r.rename(target_col)], axis=1)
+                    balance_note = (f"\n\n> ⚖️ 已欠採樣至 1:10（{info_r['original_n']:,} → "
+                                    f"{info_r['resampled_n']:,} 筆）")
+                    feature_cols = feature_cols
+
+                X_train, X_test, y_train, y_test, le, pre = prepare_data(
+                    work_df, target_col, feature_cols,
+                    config.DEFAULT_TEST_SIZE, task_type)
+
+                strategy = ("class_weight" if balancing == "class_weight" else "none")
+                comp_df, cv_list, best_name, fitted = compare_models_cv(
+                    X_train, y_train, n_folds=config.DEFAULT_CV_FOLDS,
+                    task_type=task_type, balancing_strategy=strategy)
+
+                scoring_label = "roc_auc" if task_type == "classification" else "R2"
+                result_text = (
+                    f"**🏆 候選模型 K-Fold CV 比較（{config.DEFAULT_CV_FOLDS} 折 × {scoring_label.upper()}）**\n\n"
+                    + comp_df.to_markdown(index=False) + balance_note)
+
+                if best_name:
+                    # 過擬合檢查
+                    try:
+                        check = train_test_roc_check(best_name, X_train, y_train, X_test, y_test)
+                        result_text += (
+                            f"\n\n**🔍 過擬合診斷 — {best_name}**\n"
+                            f"- Train AUC: {check['train']['auc']:.4f}｜Test AUC: {check['test']['auc']:.4f}\n"
+                            f"- Gap: {check['auc_gap']:.4f} → **{check['overfit_level']}度過擬合**\n"
+                            f"- {check['diagnosis']}")
+                        best_res = fitted.get(best_name)
+                        st.session_state.ml_results_single = {
+                            "type": task_type, "model_name": best_name,
+                            "res": {"model": best_res}, "model_name": best_name,
+                            "feature_names_out": list(X_train.columns),
+                            "le": le, "preprocessor": pre,
+                            "X_train_bal": X_train, "X_test_df": X_test, "y_test": y_test,
+                        }
+                        st.session_state.active_module = "ml"
+                    except Exception as diag_e:
+                        result_text += f"\n\n⚠️ 過擬合診斷跳過: {diag_e}"
+
+                    result_text += f"\n\n✅ **推薦模型：{best_name}**，詳細結果已在右側 ML 面板展示。"
+                    _add_finding("模型比較",
+                                 f"CV 最佳: {best_name}"
+                                 + (f"，Train/Test gap {check['auc_gap']}" if best_name else ""),
+                                 stage="model")
+
+        elif module == "generate_advice_report":
+            report = generate_advice_report(df)
+            result_text = report["markdown"]
+            st.session_state.advice_actions = report["all_actions"]
+
         else:
             result_text = f"未知的模組: {module}"
 
@@ -571,7 +731,9 @@ def _feedback_from_tool_result():
     with st.spinner("🤖 AI 正在分析結果..."):
         result = _ask_llm_structured(feedback_prompt)
     _add_msg("assistant", result["reply"])
-    st.session_state.ai_actions = result.get("actions", [])
+    # 不覆蓋工具執行時已設定的 actions（如特徵海選的「一鍵建模」）
+    if not st.session_state.get("ai_actions"):
+        st.session_state.ai_actions = result.get("actions", [])
     if result.get("target_module"):
         st.session_state.ai_suggested_params = result.get("suggested_params", {})
 
@@ -980,6 +1142,19 @@ with col_chat:
                     st.session_state.ai_actions = []  # 清除按鈕
                     st.rerun()
 
+    # ── 資料健檢報告的行動按鈕 ──
+    _advice_actions = st.session_state.get("advice_actions", [])
+    if _advice_actions and st.session_state.df is not None:
+        st.caption("📋 健檢報告建議的操作：")
+        _adv_cols = st.columns(min(len(_advice_actions), 3))
+        for _i, _act in enumerate(_advice_actions):
+            with _adv_cols[_i % 3]:
+                if st.button(_act.get("label", "執行"), key=f"adv_act_{_i}",
+                             use_container_width=True):
+                    st.session_state._pending_action = _act
+                    st.session_state.advice_actions = []
+                    st.rerun()
+
     # 匯出按鈕列（橫向排列於對話框下方）
     if st.session_state.messages:
         import re as _re
@@ -1013,6 +1188,25 @@ with col_chat:
 
     # 快速建議按鈕 (有資料時才顯示)
     if st.session_state.df is not None:
+        # ── 📋 分析健檢按鈕（手動觸發，純程式端規則，不需 LLM）──
+        if st.button("📋 AI 資料健檢與分析建議", use_container_width=True,
+                     type="primary",
+                     help="深度剖析每個欄位，產生遺漏值策略、演算法路徑、變數篩選與分箱的具體建議"):
+            with st.spinner("正在深度剖析資料並產生建議..."):
+                try:
+                    report = generate_advice_report(st.session_state.df)
+                    _add_msg("assistant", report["markdown"])
+                    st.session_state.advice_actions = report["all_actions"]
+                    targets = report["profile"].get("candidate_targets", [])
+                    if targets:
+                        _add_finding("資料健檢",
+                                     f"偵測到候選目標 `{targets[0]['column']}`"
+                                     f"（事件率 {targets[0]['event_rate']:.2%}）",
+                                     stage="understand")
+                except Exception as e:
+                    _add_msg("assistant", f"⚠️ 健檢失敗: {e}")
+            st.rerun()
+
         st.caption("💡 快速開始：")
         sg1, sg2 = st.columns(2)
         suggestions = [

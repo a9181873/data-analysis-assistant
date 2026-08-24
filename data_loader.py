@@ -83,16 +83,50 @@ def load_data(file_path, delimiter=None, encoding=None):
         return pd.read_excel(file_path)
 
     elif file_extension == '.sas7bdat':
-        # 多編碼嘗試：big5 優先（台灣 SAS 常見），再 utf-8，最後不指定
-        for enc in ['big5', 'utf-8', None]:
-            try:
-                return pd.read_sas(file_path, format='sas7bdat', encoding=enc)
-            except Exception:
-                continue
-        raise ValueError('無法讀取 SAS 檔案，請確認檔案編碼')
+        return _load_sas7bdat(file_path)
 
     else:
         raise ValueError(f"不支援的文件格式: {file_extension}")
+
+
+def _decode_bytes_cell(x):
+    """將 SAS 讀出的 bytes 儲存格解碼為字串（cp950 → utf-8 順序嘗試）。"""
+    if isinstance(x, bytes):
+        for enc in ('cp950', 'big5', 'utf-8'):
+            try:
+                return x.decode(enc)
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        return x.decode('cp950', errors='replace')
+    return x
+
+
+def _load_sas7bdat(file_path):
+    """
+    載入 .sas7bdat 檔案。
+    編碼嘗試順序：big5（台灣 SAS 最常見）→ cp950 → gb18030 → utf-8。
+    全部失敗時，改讀成 bytes 後逐欄手動解碼，
+    避免 encoding=None 直接回傳 b'...' 位元組欄位導致後續分析全壞。
+    """
+    last_error = None
+    for enc in ['big5', 'cp950', 'gb18030', 'utf-8']:
+        try:
+            df = pd.read_sas(file_path, format='sas7bdat', encoding=enc)
+            return _validate_dataframe(df, file_path)
+        except (ValueError, UnicodeDecodeError, UnicodeError) as e:
+            last_error = e
+            continue
+
+    # 最後手段：encoding=None 讀出 bytes，逐欄解碼，確保下游拿到 str
+    try:
+        df = pd.read_sas(file_path, format='sas7bdat', encoding=None)
+    except Exception as e:
+        raise ValueError(f"無法讀取 SAS 檔案: {e}（最後錯誤: {last_error}）")
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].map(_decode_bytes_cell)
+    return _validate_dataframe(df, file_path)
 
 
 def _validate_dataframe(df, file_path, **kwargs):

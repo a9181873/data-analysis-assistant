@@ -200,6 +200,8 @@ def render(df: pd.DataFrame):
                 help="當類別分佈不均時使用"
             )
         with c4:
+            from theory import render_theory as _rt
+            _rt("imbalance_handling", label="📖 不平衡處理怎麼選？")
             if balance_strategy in ("smote", "adasyn", "smote_tomek") and not IMBLEARN_AVAILABLE:
                 st.warning("需安裝 `imbalanced-learn`: `pip install imbalanced-learn`")
     else:
