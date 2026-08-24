@@ -42,3 +42,6 @@ test_datasets/
 
 # .env template IS committed (no secrets), but real .env is excluded
 !.env.example
+
+# RAG runtime database (local knowledge base, may contain user docs)
+storage/chroma.sqlite3
