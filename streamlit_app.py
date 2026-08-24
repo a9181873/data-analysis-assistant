@@ -805,8 +805,15 @@ with st.sidebar:
     if _is_cloud:
         st.session_state.llm_source = "cloud"
 
-        # 扁平模型列表：一個下拉選單直接選模型
-        _models = config.CLOUD_MODELS
+        # 扁平模型列表：一個下拉選單直接選模型（可篩選只顯示免費）
+        _only_free = st.checkbox("🆓 只顯示免費模型", value=True,
+                                 key="only_free_models",
+                                 help="勾選時僅列出標記 🆓 的免費方案；取消勾選可查看全部模型")
+        _pool = [m for m in config.CLOUD_MODELS
+                 if (_only_free and "🆓" in m["rating"]) or not _only_free]
+        if not _pool:  # 保底：清單空時退回全部
+            _pool = config.CLOUD_MODELS
+        _models = _pool
         _display = [f"{m['rating']} {m['id']}  ({m['provider']})" for m in _models]
         _cur_idx = st.session_state.llm_cloud_model_idx
         if _cur_idx >= len(_models):
