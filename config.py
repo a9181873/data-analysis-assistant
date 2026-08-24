@@ -3,6 +3,15 @@
 # ===================================
 import os
 
+# --- 載入專案根目錄的 .env 檔（API Key 統一放這裡，見 .env.example）---
+try:
+    from dotenv import load_dotenv
+    # utf-8-sig：自動容錯 Windows 記事本可能產生的 BOM 位元組標記
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"),
+                encoding="utf-8-sig")
+except ImportError:
+    pass  # python-dotenv 未安裝時退回純系統環境變數
+
 # --- LLM 模型配置 ---
 # 推理模型 (推薦使用 DeepSeek-R1 以獲得最佳數理邏輯能力)
 #   - deepseek-r1:14b  ~9GB RAM，適合 16GB-32GB RAM 機器 (極致推理)

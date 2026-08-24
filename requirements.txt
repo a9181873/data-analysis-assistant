@@ -46,3 +46,4 @@ huggingface-hub>=0.34.0,<1.0
 
 # HTTP
 requests>=2.31.0
+python-dotenv

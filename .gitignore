@@ -39,3 +39,6 @@ secrets.toml
 
 # Test datasets (downloaded public data - see test_*.py scripts for URLs)
 test_datasets/
+
+# .env template IS committed (no secrets), but real .env is excluded
+!.env.example
