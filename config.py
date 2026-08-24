@@ -44,8 +44,19 @@ CLOUD_MODELS = [
     {"id": "gemini-2.5-pro",   "provider": "Google", "rating": "🆓⭐⭐⭐⭐⭐", "note": "旗艦級推理，複雜分析首選（免費層有速率限制）",
      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "env_key": "GEMINI_API_KEY"},
     # --- OpenRouter (需要 OPENROUTER_API_KEY，一個 key 用所有模型) ---
-    {"id": "deepseek/deepseek-chat-v3-0324:free", "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐",
-     "note": "免費層 DeepSeek V3（有速率限制），零成本入門首選",
+    # 🆓 免費模型（2026-08 實測可用；來源：GET /api/v1/models 篩選價格=0）
+    # openrouter/free 是自動路由器，永遠導向當前可用的免費模型，最不易失效
+    {"id": "openrouter/free",                        "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐",
+     "note": "免費自動路由：永遠導向當前可用的免費模型，最穩定不易失效",
+     "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
+    {"id": "nvidia/nemotron-3-ultra-550b-a55b:free", "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐⭐",
+     "note": "NVIDIA Nemotron Ultra 550B，免費模型中推理能力最強（1M context）",
+     "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
+    {"id": "google/gemma-4-31b-it:free",             "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐",
+     "note": "Google Gemma 4 31B，均衡通用（熱門時段可能短暫 429，重試即可）",
+     "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
+    {"id": "nvidia/nemotron-3.5-lightning:free",     "provider": "OpenRouter", "rating": "🆓⭐⭐⭐⭐",
+     "note": "NVIDIA Lightning，速度最快的免費選擇（1M context）",
      "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
     {"id": "anthropic/claude-sonnet-4",  "provider": "OpenRouter", "rating": "⭐⭐⭐⭐⭐", "note": "推理最強，程式碼與分析頂級",
      "base_url": "https://openrouter.ai/api/v1",                   "env_key": "OPENROUTER_API_KEY"},
